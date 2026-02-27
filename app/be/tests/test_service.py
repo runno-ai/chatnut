@@ -1,5 +1,7 @@
 """Tests for ChatService business logic."""
 
+from datetime import datetime, timezone, timedelta
+
 import pytest
 from team_chat_mcp.service import ChatService
 
@@ -36,6 +38,7 @@ def test_init_room_same_name_different_project(db):
 
 def test_post_message(db):
     svc = ChatService(db)
+    svc.init_room("proj", "dev")
     result = svc.post_message("proj", "dev", "alice", "hello world")
     assert result["id"] is not None
     assert result["room_id"] is not None
@@ -44,15 +47,15 @@ def test_post_message(db):
     assert result["message_type"] == "message"
 
 
-def test_post_message_auto_creates_room(db):
+def test_post_message_requires_existing_room(db):
     svc = ChatService(db)
-    svc.post_message("proj", "new-room", "alice", "first message")
-    result = svc.list_rooms(project="proj")
-    assert any(r["name"] == "new-room" for r in result["rooms"])
+    with pytest.raises(ValueError, match="not found"):
+        svc.post_message("proj", "new-room", "alice", "first message")
 
 
 def test_post_message_system_type(db):
     svc = ChatService(db)
+    svc.init_room("proj", "dev")
     result = svc.post_message("proj", "dev", "system", "Room created", message_type="system")
     assert result["message_type"] == "system"
 
@@ -67,6 +70,7 @@ def test_post_message_to_archived_room_rejected(db):
 
 def test_read_messages(db):
     svc = ChatService(db)
+    svc.init_room("proj", "dev")
     svc.post_message("proj", "dev", "alice", "msg1")
     svc.post_message("proj", "dev", "bob", "msg2")
     result = svc.read_messages("proj", "dev")
@@ -76,6 +80,7 @@ def test_read_messages(db):
 
 def test_read_messages_since_id(db):
     svc = ChatService(db)
+    svc.init_room("proj", "dev")
     m1 = svc.post_message("proj", "dev", "alice", "msg1")
     svc.post_message("proj", "dev", "bob", "msg2")
     result = svc.read_messages("proj", "dev", since_id=m1["id"])
@@ -85,6 +90,7 @@ def test_read_messages_since_id(db):
 
 def test_read_messages_with_limit(db):
     svc = ChatService(db)
+    svc.init_room("proj", "dev")
     for i in range(5):
         svc.post_message("proj", "dev", "alice", f"msg-{i}")
     result = svc.read_messages("proj", "dev", limit=3)
@@ -94,6 +100,7 @@ def test_read_messages_with_limit(db):
 
 def test_read_messages_filter_by_type(db):
     svc = ChatService(db)
+    svc.init_room("proj", "dev")
     svc.post_message("proj", "dev", "system", "Created", message_type="system")
     svc.post_message("proj", "dev", "alice", "hello")
     result = svc.read_messages("proj", "dev", message_type="message")
@@ -160,6 +167,33 @@ def test_archive_room_not_found(db):
         svc.archive_room("proj", "nope")
 
 
+def test_delete_room_archived(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.post_message("proj", "dev", "alice", "hello")
+    svc.post_message("proj", "dev", "bob", "world")
+    svc.archive_room("proj", "dev")
+    result = svc.delete_room(room["id"])
+    assert result["name"] == "dev"
+    assert result["deleted_messages"] == 2
+    # Room is gone
+    rooms = svc.list_rooms(status="all")
+    assert len(rooms["rooms"]) == 0
+
+
+def test_delete_room_live_rejected(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    with pytest.raises(ValueError, match="live"):
+        svc.delete_room(room["id"])
+
+
+def test_delete_room_not_found(db):
+    svc = ChatService(db)
+    with pytest.raises(ValueError, match="not found"):
+        svc.delete_room("nonexistent")
+
+
 def test_archive_room_already_archived(db):
     svc = ChatService(db)
     svc.init_room("proj", "dev")
@@ -170,6 +204,7 @@ def test_archive_room_already_archived(db):
 
 def test_clear_room(db):
     svc = ChatService(db)
+    svc.init_room("proj", "dev")
     svc.post_message("proj", "dev", "alice", "hello")
     svc.post_message("proj", "dev", "bob", "world")
     result = svc.clear_room("proj", "dev")
@@ -185,6 +220,7 @@ def test_clear_room_not_found(db):
 
 def test_search(db):
     svc = ChatService(db)
+    svc.init_room("proj", "planning")
     svc.post_message("proj", "planning", "alice", "auth feature discussion")
     result = svc.search("auth", project="proj")
     assert len(result["message_rooms"]) == 1
@@ -195,6 +231,7 @@ def test_search(db):
 
 def test_read_messages_by_room_id_happy_path(db):
     svc = ChatService(db)
+    svc.init_room("proj", "dev")
     svc.post_message("proj", "dev", "alice", "hello")
     svc.post_message("proj", "dev", "bob", "world")
     rooms = svc.list_rooms(project="proj")
@@ -208,6 +245,7 @@ def test_read_messages_by_room_id_happy_path(db):
 
 def test_read_messages_by_room_id_since_id(db):
     svc = ChatService(db)
+    svc.init_room("proj", "dev")
     m1 = svc.post_message("proj", "dev", "alice", "first")
     svc.post_message("proj", "dev", "bob", "second")
     rooms = svc.list_rooms(project="proj")
@@ -219,6 +257,7 @@ def test_read_messages_by_room_id_since_id(db):
 
 def test_read_messages_by_room_id_limit(db):
     svc = ChatService(db)
+    svc.init_room("proj", "dev")
     for i in range(5):
         svc.post_message("proj", "dev", "alice", f"msg-{i}")
     rooms = svc.list_rooms(project="proj")
@@ -230,6 +269,7 @@ def test_read_messages_by_room_id_limit(db):
 
 def test_read_messages_by_room_id_message_type_filter(db):
     svc = ChatService(db)
+    svc.init_room("proj", "dev")
     svc.post_message("proj", "dev", "system", "Room created", message_type="system")
     svc.post_message("proj", "dev", "alice", "hello")
     rooms = svc.list_rooms(project="proj")
@@ -251,6 +291,8 @@ def test_read_messages_by_room_id_nonexistent(db):
 
 def test_get_all_room_stats(db):
     svc = ChatService(db)
+    svc.init_room("proj", "room1")
+    svc.init_room("proj", "room2")
     svc.post_message("proj", "room1", "alice", "hello")
     svc.post_message("proj", "room1", "bob", "world")
     svc.post_message("proj", "room2", "carol", "hi there")
@@ -284,11 +326,121 @@ def test_post_message_invalid_message_type(db):
 
 def test_post_message_valid_message_type(db):
     svc = ChatService(db)
+    svc.init_room("proj", "dev")
     result = svc.post_message("proj", "dev", "alice", "hello", message_type="message")
     assert result["message_type"] == "message"
 
 
 def test_post_message_system_message_type(db):
     svc = ChatService(db)
+    svc.init_room("proj", "dev")
     result = svc.post_message("proj", "dev", "system", "event", message_type="system")
     assert result["message_type"] == "system"
+
+
+# --- Auto-archive stale rooms ---
+
+
+def _set_room_created_at(db, room_id: str, ts: str):
+    """Backdate a room's created_at for testing."""
+    db.execute("UPDATE rooms SET created_at=? WHERE id=?", (ts, room_id))
+    db.commit()
+
+
+def _set_last_message_ts(db, room_id: str, ts: str):
+    """Backdate all messages in a room for testing."""
+    db.execute("UPDATE messages SET created_at=? WHERE room_id=?", (ts, room_id))
+    db.commit()
+
+
+def test_auto_archive_stale_room_with_old_messages(db):
+    """Room with messages older than threshold gets archived."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "stale-room")
+    svc.post_message("proj", "stale-room", "alice", "hello")
+    old_ts = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
+    _set_last_message_ts(db, room["id"], old_ts)
+
+    archived = svc.auto_archive_stale_rooms(max_inactive_seconds=7200)
+    assert len(archived) == 1
+    assert archived[0]["name"] == "stale-room"
+    assert archived[0]["status"] == "archived"
+
+
+def test_auto_archive_empty_room_created_long_ago(db):
+    """Empty room created before threshold gets archived."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "empty-old")
+    old_ts = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
+    _set_room_created_at(db, room["id"], old_ts)
+
+    archived = svc.auto_archive_stale_rooms(max_inactive_seconds=7200)
+    assert len(archived) == 1
+    assert archived[0]["name"] == "empty-old"
+
+
+def test_auto_archive_skips_active_room(db):
+    """Room with recent messages is not archived."""
+    svc = ChatService(db)
+    svc.init_room("proj", "active-room")
+    svc.post_message("proj", "active-room", "alice", "just now")
+
+    archived = svc.auto_archive_stale_rooms(max_inactive_seconds=7200)
+    assert len(archived) == 0
+    rooms = svc.list_rooms(status="live", project="proj")
+    assert len(rooms["rooms"]) == 1
+
+
+def test_auto_archive_skips_already_archived(db):
+    """Already-archived rooms are not touched."""
+    svc = ChatService(db)
+    svc.init_room("proj", "old-archived")
+    svc.archive_room("proj", "old-archived")
+
+    archived = svc.auto_archive_stale_rooms(max_inactive_seconds=7200)
+    assert len(archived) == 0
+
+
+def test_auto_archive_mixed_rooms(db):
+    """Only stale live rooms are archived; active and already-archived are skipped."""
+    svc = ChatService(db)
+    # Stale room (old messages)
+    stale = svc.init_room("proj", "stale")
+    svc.post_message("proj", "stale", "alice", "old msg")
+    old_ts = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
+    _set_last_message_ts(db, stale["id"], old_ts)
+
+    # Active room (recent messages)
+    svc.init_room("proj", "active")
+    svc.post_message("proj", "active", "bob", "recent")
+
+    # Already archived
+    svc.init_room("proj", "done")
+    svc.archive_room("proj", "done")
+
+    archived = svc.auto_archive_stale_rooms(max_inactive_seconds=7200)
+    assert len(archived) == 1
+    assert archived[0]["name"] == "stale"
+
+    # Verify final state
+    live = svc.list_rooms(status="live", project="proj")
+    assert len(live["rooms"]) == 1
+    assert live["rooms"][0]["name"] == "active"
+
+
+def test_db_delete_room_transactional(db):
+    """L1: db.delete_room deletes messages and room in one transaction."""
+    from team_chat_mcp.db import create_room, insert_message, delete_room, get_room_by_id, get_messages
+    room = create_room(db, project="proj", name="to-delete")
+    insert_message(db, room.id, "alice", "msg1")
+    insert_message(db, room.id, "bob", "msg2")
+    # Archive first (delete_room doesn't check status — that's service layer)
+    db.execute("UPDATE rooms SET status='archived' WHERE id=?", (room.id,))
+    db.commit()
+    msg_count = delete_room(db, room.id)
+    assert msg_count == 2
+    # Room should be gone
+    assert get_room_by_id(db, room.id) is None
+    # Messages should be gone
+    msgs, _ = get_messages(db, room.id)
+    assert len(msgs) == 0

@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ChatroomInfo, SearchResult } from "../types";
 import { getRoleColor } from "../utils/roleColors";
+import { Select } from "./Select";
 
 interface SidebarProps {
   active: ChatroomInfo[];
@@ -21,6 +22,7 @@ interface SidebarProps {
   onSelectProject: (project: string | null) => void;
   onSelectBranch: (branch: string | null) => void;
   onSearchChange: (query: string) => void;
+  onDeleteRoom: (roomId: string) => void;
 }
 
 function formatRelativeTime(ts?: string): string {
@@ -62,6 +64,7 @@ export function Sidebar({
   onSelectProject,
   onSelectBranch,
   onSearchChange,
+  onDeleteRoom,
 }: SidebarProps) {
   if (collapsed) {
     return (
@@ -79,10 +82,13 @@ export function Sidebar({
     );
   }
 
-  // Sort active: by last message time (newest first)
-  const sortedActive = [...active].sort((a, b) => {
-    return (b.lastMessageTs ?? "").localeCompare(a.lastMessageTs ?? "");
-  });
+  // Sort by last message time (newest first)
+  const sortedActive = [...active].sort((a, b) =>
+    (b.lastMessageTs ?? "").localeCompare(a.lastMessageTs ?? "")
+  );
+  const sortedArchived = [...archived].sort((a, b) =>
+    (b.lastMessageTs ?? "").localeCompare(a.lastMessageTs ?? "")
+  );
 
   // Search result highlighting
   const searchRoomIds = new Set(searchResult?.rooms?.map((r) => r.id) ?? []);
@@ -92,10 +98,15 @@ export function Sidebar({
 
   const isSearching = searchQuery.length >= 2;
 
-  // Filter rooms by search if active
+  // Filter rooms by search
+  const matchesSearch = (r: ChatroomInfo) =>
+    searchRoomIds.has(r.id) || messageMatchRoomIds.has(r.id) || r.name.toLowerCase().includes(searchQuery.toLowerCase());
   const filteredActive = isSearching
-    ? sortedActive.filter((r) => searchRoomIds.has(r.id) || messageMatchRoomIds.has(r.id))
+    ? sortedActive.filter(matchesSearch)
     : sortedActive;
+  const filteredArchived = isSearching
+    ? sortedArchived.filter(matchesSearch)
+    : sortedArchived;
 
   return (
     <div className="bg-gray-900 border-r border-gray-800 flex flex-col shrink-0" style={{ width }}>
@@ -114,40 +125,34 @@ export function Sidebar({
       </div>
 
       {/* Filters */}
-      <div className="px-3 py-2 space-y-2 border-b border-gray-800">
-        <div className="flex gap-2">
-          <select
-            value={selectedProject ?? ""}
-            onChange={(e) => {
-              onSelectProject(e.target.value || null);
-              onSelectBranch(null);
-            }}
-            className="flex-1 bg-gray-800 text-gray-300 text-xs rounded px-2 py-1.5 border border-gray-700 focus:border-blue-500 focus:outline-none"
-          >
-            <option value="">All projects</option>
-            {projects.map((p) => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </select>
-          <select
-            value={selectedBranch ?? ""}
-            onChange={(e) => onSelectBranch(e.target.value || null)}
-            disabled={!selectedProject}
-            className="flex-1 bg-gray-800 text-gray-300 text-xs rounded px-2 py-1.5 border border-gray-700 focus:border-blue-500 focus:outline-none disabled:opacity-40"
-          >
-            <option value="">All branches</option>
-            {branches.map((b) => (
-              <option key={b} value={b}>{b}</option>
-            ))}
-          </select>
-        </div>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Search rooms & messages..."
-          className="w-full bg-gray-800 text-gray-300 text-xs rounded px-2 py-1.5 border border-gray-700 focus:border-blue-500 focus:outline-none placeholder-gray-600"
+      <div className="px-3 py-2 space-y-1.5 border-b border-gray-800">
+        <Select
+          value={selectedProject ?? ""}
+          onChange={(v) => { onSelectProject(v || null); onSelectBranch(null); }}
+          options={projects.map((p) => ({ value: p, label: p }))}
+          placeholder="All projects"
+          icon={<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M1.75 1A1.75 1.75 0 000 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0016 13.25v-8.5A1.75 1.75 0 0014.25 3H7.5a.25.25 0 01-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75z" /></svg>}
         />
+        <Select
+          value={selectedBranch ?? ""}
+          onChange={(v) => onSelectBranch(v || null)}
+          options={branches.map((b) => ({ value: b, label: b }))}
+          placeholder="All branches"
+          disabled={!selectedProject}
+          icon={<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M9.5 3.25a2.25 2.25 0 113 2.122V6A2.5 2.5 0 0110 8.5H6A2.5 2.5 0 003.5 11v.128a2.251 2.251 0 11-1.5 0V5.372a2.25 2.25 0 111.5 0v1.836A3.99 3.99 0 016 6h4V5.372A2.25 2.25 0 019.5 3.25zm-6 0a.75.75 0 10-1.5 0 .75.75 0 001.5 0zm8.25-.75a.75.75 0 100 1.5.75.75 0 000-1.5zM2.75 12a.75.75 0 100 1.5.75.75 0 000-1.5z" /></svg>}
+        />
+        <div className="relative">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">
+            <path d="M11.5 7a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zm-.82 4.74a6 6 0 111.06-1.06l3.04 3.04a.75.75 0 11-1.06 1.06l-3.04-3.04z" />
+          </svg>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Search rooms & messages..."
+            className="w-full bg-gray-800/50 text-gray-300 text-xs rounded-full pl-7 pr-2 py-1.5 border-none focus:ring-1 focus:ring-blue-500/50 focus:outline-none placeholder-gray-600"
+          />
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -159,7 +164,7 @@ export function Sidebar({
           <div className="px-3 py-4 text-sm text-gray-500">Searching...</div>
         )}
 
-        {isSearching && !searchLoading && filteredActive.length === 0 && (
+        {isSearching && !searchLoading && filteredActive.length === 0 && filteredArchived.length === 0 && (
           <div className="px-3 py-4 text-sm text-gray-500">No results found.</div>
         )}
 
@@ -184,12 +189,13 @@ export function Sidebar({
         )}
 
         {/* Archived */}
-        {!isSearching && archived.length > 0 && (
+        {filteredArchived.length > 0 && (
           <ArchivedSection
-            archived={archived}
+            archived={filteredArchived}
             selectedRoom={selectedRoom}
             showProject={!selectedProject}
             onSelectRoom={onSelectRoom}
+            onDeleteRoom={onDeleteRoom}
           />
         )}
       </div>
@@ -204,13 +210,16 @@ function ArchivedSection({
   selectedRoom,
   showProject,
   onSelectRoom,
+  onDeleteRoom,
 }: {
   archived: ChatroomInfo[];
   selectedRoom: string | null;
   showProject: boolean;
   onSelectRoom: (roomId: string) => void;
+  onDeleteRoom: (roomId: string) => void;
 }) {
   const [showCount, setShowCount] = useState(ARCHIVE_PAGE_SIZE);
+  const [confirmDelete, setConfirmDelete] = useState<ChatroomInfo | null>(null);
   const visible = archived.slice(0, showCount);
   const remaining = archived.length - showCount;
 
@@ -226,6 +235,7 @@ function ArchivedSection({
           isSelected={selectedRoom === room.id}
           showProject={showProject}
           onClick={() => onSelectRoom(room.id)}
+          onDelete={() => setConfirmDelete(room)}
         />
       ))}
       {remaining > 0 && (
@@ -236,6 +246,57 @@ function ArchivedSection({
           Show more ({remaining})
         </button>
       )}
+      {confirmDelete && (
+        <DeleteConfirmDialog
+          room={confirmDelete}
+          onConfirm={() => { onDeleteRoom(confirmDelete.id); setConfirmDelete(null); }}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function DeleteConfirmDialog({
+  room,
+  onConfirm,
+  onCancel,
+}: {
+  room: ChatroomInfo;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onCancel]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onCancel}>
+      <div role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title" aria-describedby="delete-dialog-desc" className="bg-gray-800 border border-gray-700 rounded-lg shadow-xl p-4 max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
+        <div id="delete-dialog-title" className="text-sm font-medium text-gray-200 mb-2">Delete chatroom?</div>
+        <p id="delete-dialog-desc" className="text-xs text-gray-400 mb-4">
+          Permanently delete <span className="text-gray-200 font-medium">{room.name}</span> and all its messages.
+          This cannot be undone.
+        </p>
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-3 py-1.5 text-xs rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="px-3 py-1.5 text-xs rounded bg-red-600 text-white hover:bg-red-500 transition-colors"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -247,6 +308,7 @@ function RoomItem({
   matchCount,
   showProject,
   onClick,
+  onDelete,
 }: {
   room: ChatroomInfo;
   isLive?: boolean;
@@ -254,6 +316,7 @@ function RoomItem({
   matchCount?: number;
   showProject?: boolean;
   onClick: () => void;
+  onDelete?: () => void;
 }) {
   const timeStr = formatRelativeTime(room.lastMessageTs);
 
@@ -262,9 +325,12 @@ function RoomItem({
     : [];
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
-      className={`relative w-full text-left px-2 py-2 rounded-md mb-0.5 transition-colors ${
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
+      className={`group relative w-full text-left px-2 py-2 rounded-md mb-0.5 transition-colors cursor-pointer ${
         isSelected
           ? "bg-gray-800 text-gray-100"
           : "text-gray-400 hover:bg-gray-800/50 hover:text-gray-200"
@@ -286,19 +352,28 @@ function RoomItem({
             {matchCount} match{matchCount > 1 ? "es" : ""}
           </span>
         )}
-        <span className="text-xs text-gray-600 ml-auto shrink-0">
+        {onDelete && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            aria-label={`Delete room ${room.name}`}
+            className="shrink-0 ml-auto p-0.5 rounded text-gray-600 hover:text-red-400 hover:bg-red-400/10 transition-colors opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+            title="Delete room"
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M11 1.75V3h2.25a.75.75 0 010 1.5H2.75a.75.75 0 010-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75zM6.5 1.75v1.25h3V1.75a.25.25 0 00-.25-.25h-2.5a.25.25 0 00-.25.25zM4.997 6.178a.75.75 0 10-1.493.144L4.2 13.34a1.75 1.75 0 001.742 1.66h4.117a1.75 1.75 0 001.741-1.66l.696-7.018a.75.75 0 10-1.493-.144L10.306 13.2a.25.25 0 01-.249.237H5.944a.25.25 0 01-.249-.237L4.997 6.178z" />
+            </svg>
+          </button>
+        )}
+        <span className={`text-xs text-gray-600 shrink-0 ${onDelete ? "group-hover:opacity-0 transition-opacity" : "ml-auto"}`}>
           {timeStr}
         </span>
       </div>
-      {(showProject || room.branch) && (
-        <div className="flex gap-1 mt-0.5 pl-4">
-          {showProject && (
-            <span className="text-[10px] text-gray-600">{room.project}</span>
-          )}
-          {room.branch && (
-            <span className="text-[10px] text-gray-600">/{room.branch}</span>
-          )}
-        </div>
+      {showProject && (
+        <div className="mt-0.5 pl-4 text-[10px] text-gray-600 truncate">{room.project}</div>
+      )}
+      {room.branch && (
+        <div className="mt-0.5 pl-4 text-[10px] text-gray-600 truncate">{room.branch}</div>
       )}
       {roles.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1 pl-4">
@@ -320,6 +395,6 @@ function RoomItem({
           ))}
         </div>
       )}
-    </button>
+    </div>
   );
 }

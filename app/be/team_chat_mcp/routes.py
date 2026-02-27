@@ -144,6 +144,15 @@ def create_router(get_service) -> APIRouter:
             room_id, since_id=since_id, limit=limit, message_type=message_type
         )
 
+    @router.delete("/chatrooms/{room_id}")
+    def delete_chatroom(room_id: str) -> dict:
+        try:
+            return get_service().delete_room(room_id)
+        except ValueError as e:
+            msg = str(e)
+            status = 404 if "not found" in msg else 422
+            raise HTTPException(status_code=status, detail=msg) from e
+
     @router.get("/search")
     def search(q: str, project: str | None = None):
         return get_service().search(q, project=project)

@@ -43,6 +43,10 @@ export function ChatView({ room, roomName, isLive }: ChatViewProps) {
       .then((data) => {
         if (!controller.signal.aborted) {
           setStaticMessages(data.messages ?? []);
+          requestAnimationFrame(() => {
+            const el = containerRef.current;
+            if (el) el.scrollTop = el.scrollHeight;
+          });
         }
       })
       .catch((err) => {
@@ -78,13 +82,14 @@ export function ChatView({ room, roomName, isLive }: ChatViewProps) {
     prevMessageCount.current = messages.length;
   }, [messages.length, isAtBottom]);
 
-  // Scroll to top on room change (read from beginning)
+  // Scroll to bottom on room change (focus on latest messages)
   useEffect(() => {
     prevMessageCount.current = 0;
     setNewCount(0);
-    setIsAtBottom(false);
+    setIsAtBottom(true);
     scrollTimeoutRef.current = setTimeout(() => {
-      containerRef.current?.scrollTo(0, 0);
+      const el = containerRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
     }, 50);
     return () => {
       if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
@@ -132,8 +137,8 @@ export function ChatView({ room, roomName, isLive }: ChatViewProps) {
         {!loadingStatic && messages.length === 0 && (
           <div className="text-gray-600 text-sm py-4">No messages yet.</div>
         )}
-        {messages.map((msg) => (
-          <Message key={msg.id} message={msg} />
+        {messages.map((msg, i) => (
+          <Message key={msg.id} message={msg} isLast={i === messages.length - 1} />
         ))}
         <div ref={bottomRef} />
       </div>

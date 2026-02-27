@@ -1,6 +1,8 @@
 # team_chat_mcp/app.py
 """FastAPI application — mounts MCP + REST/SSE routes + static file serving."""
 
+import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager
 from functools import lru_cache
@@ -8,6 +10,11 @@ from functools import lru_cache
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastmcp.utilities.lifespan import combine_lifespans
+
+logger = logging.getLogger(__name__)
+
+AUTO_ARCHIVE_INTERVAL = 300  # check every 5 minutes
+AUTO_ARCHIVE_INACTIVE_SECONDS = 7200  # archive after 2 hours of inactivity
 
 from team_chat_mcp.db import init_db
 from team_chat_mcp.service import ChatService
@@ -32,11 +39,30 @@ mcp_module.set_service_factory(_get_service)
 mcp_app = mcp.http_app(path="/", transport="streamable-http")
 
 
+async def _auto_archive_loop() -> None:
+    """Periodically archive stale live rooms."""
+    while True:
+        await asyncio.sleep(AUTO_ARCHIVE_INTERVAL)
+        try:
+            archived = _get_service().auto_archive_stale_rooms(AUTO_ARCHIVE_INACTIVE_SECONDS)
+            if archived:
+                names = [r["name"] for r in archived]
+                logger.info("Auto-archived %d stale rooms: %s", len(archived), names)
+        except Exception:
+            logger.exception("Auto-archive failed")
+
+
 @asynccontextmanager
 async def app_lifespan(app):
     # Ensure service is initialized at startup
     _get_service()
+    task = asyncio.create_task(_auto_archive_loop())
     yield
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(

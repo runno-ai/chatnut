@@ -39,19 +39,17 @@ def test_full_lifecycle(db):
     assert len(result["messages"]) == 2
 
 
-def test_auto_create_room_on_post(db):
-    """post_message should auto-create room if it doesn't exist."""
+def test_post_message_requires_existing_room(db):
+    """post_message should raise ValueError if room doesn't exist."""
     svc = ChatService(db)
-    svc.post_message("proj", "auto-room", "alice", "first message")
-
-    rooms = svc.list_rooms(project="proj")
-    names = [r["name"] for r in rooms["rooms"]]
-    assert "auto-room" in names
+    with pytest.raises(ValueError, match="not found"):
+        svc.post_message("proj", "no-such-room", "alice", "first message")
 
 
 def test_clear_room_preserves_room(db):
     """clear_room deletes messages but keeps the room record."""
     svc = ChatService(db)
+    svc.init_room("proj", "clear-test")
     svc.post_message("proj", "clear-test", "alice", "hello")
     svc.post_message("proj", "clear-test", "bob", "world")
 
@@ -71,6 +69,8 @@ def test_clear_room_preserves_room(db):
 def test_cross_project_isolation(db):
     """Rooms with same name in different projects are independent."""
     svc = ChatService(db)
+    svc.init_room("proj-a", "dev")
+    svc.init_room("proj-b", "dev")
     svc.post_message("proj-a", "dev", "alice", "message in proj-a")
     svc.post_message("proj-b", "dev", "bob", "message in proj-b")
 
@@ -85,6 +85,7 @@ def test_cross_project_isolation(db):
 def test_message_types(db):
     """System and regular messages coexist, can be filtered."""
     svc = ChatService(db)
+    svc.init_room("proj", "dev")
     svc.post_message("proj", "dev", "system", "Room created", message_type="system")
     svc.post_message("proj", "dev", "alice", "hello")
     svc.post_message("proj", "dev", "bob", "world")
@@ -102,6 +103,9 @@ def test_message_types(db):
 def test_search_across_rooms(db):
     """Search finds matches in room names and message content."""
     svc = ChatService(db)
+    svc.init_room("proj", "planning")
+    svc.init_room("proj", "dev")
+    svc.init_room("proj", "ops")
     svc.post_message("proj", "planning", "alice", "discuss auth feature")
     svc.post_message("proj", "dev", "bob", "implement auth handler")
     svc.post_message("proj", "ops", "charlie", "deploy staging")

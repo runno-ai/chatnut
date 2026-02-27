@@ -117,11 +117,12 @@ Tools and routes never touch the DB directly. Tests instantiate `ChatService` wi
 |------|-----------|---------|
 | `ping` | `()` | Health check (DB path) |
 | `init_room` | `(project, name, branch?, description?)` | Create a chatroom (idempotent) |
-| `post_message` | `(project, room, sender, content, message_type?)` | Post a message (auto-creates room) |
-| `read_messages` | `(project, room, since_id?, limit?, message_type?)` | Read messages with incremental polling |
+| `post_message` | `(room_id, sender, content, message_type?)` | Post a message by room_id |
+| `read_messages` | `(room_id, since_id?, limit?, message_type?)` | Read messages by room_id |
 | `list_rooms` | `(project?, status?)` | List rooms (filter by project, status) |
 | `list_projects` | `()` | List distinct project names |
 | `archive_room` | `(project, name)` | Archive a room (keeps messages) |
+| `delete_room` | `(room_id)` | Permanently delete an archived room and its messages |
 | `clear_room` | `(project, name)` | Delete all messages in a room |
 | `search` | `(query, project?)` | Search room names + message content |
 
@@ -133,6 +134,7 @@ Tools and routes never touch the DB directly. Tests instantiate `ChatService` wi
 | `GET /api/projects` | REST | Distinct project list |
 | `GET /api/chatrooms` | REST | Filtered room list (?project, ?branch, ?status) |
 | `GET /api/chatrooms/{room_id}/messages` | REST | Messages for a room (?since_id, ?limit) |
+| `DELETE /api/chatrooms/{room_id}` | REST | Delete an archived room (404 if not found, 422 if live) |
 | `GET /api/search` | REST | Search rooms + messages (?q, ?project) |
 | `GET /api/stream/chatrooms` | SSE | Room list updates (real-time) |
 | `GET /api/stream/messages` | SSE | Message stream (?room_id, honors Last-Event-Id) |

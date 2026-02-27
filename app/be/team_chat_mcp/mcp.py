@@ -45,26 +45,24 @@ def init_room(
 
 @mcp.tool()
 def post_message(
-    project: str,
-    room: str,
+    room_id: str,
     sender: str,
     content: str,
     message_type: str = "message",
 ) -> dict:
-    """Post a message to a room. Auto-creates room if missing. Rejects posts to archived rooms."""
-    return _get_service().post_message(project, room, sender, content, message_type=message_type)
+    """Post a message to a room by room_id (from init_room). Rejects posts to archived rooms."""
+    return _get_service().post_message_by_room_id(room_id, sender, content, message_type=message_type)
 
 
 @mcp.tool()
 def read_messages(
-    project: str,
-    room: str,
+    room_id: str,
     since_id: int | None = None,
     limit: int = 100,
     message_type: str | None = None,
 ) -> dict:
-    """Read messages from a room. Use since_id for incremental polling. Default limit 100."""
-    return _get_service().read_messages(project, room, since_id=since_id, limit=limit, message_type=message_type)
+    """Read messages from a room by room_id (from init_room). Use since_id for incremental polling. Default limit 100."""
+    return _get_service().read_messages_by_room_id(room_id, since_id=since_id, limit=limit, message_type=message_type)
 
 
 @mcp.tool()
@@ -83,6 +81,12 @@ def list_projects() -> dict:
 def archive_room(project: str, name: str) -> dict:
     """Archive a room. Sets status to 'archived', keeps all messages."""
     return _get_service().archive_room(project, name)
+
+
+@mcp.tool()
+def delete_room(room_id: str) -> dict:
+    """Permanently delete a room and all its messages. Only archived rooms can be deleted."""
+    return _get_service().delete_room(room_id)
 
 
 @mcp.tool()

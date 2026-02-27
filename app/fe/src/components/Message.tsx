@@ -6,6 +6,7 @@ import { MentionChip } from "./MentionChip";
 
 interface MessageProps {
   message: ChatMessage;
+  isLast?: boolean;
 }
 
 function formatTimestamp(ts: string): string {
@@ -31,13 +32,13 @@ function formatTimestamp(ts: string): string {
   }
 }
 
-export function Message({ message }: MessageProps) {
+export function Message({ message, isLast }: MessageProps) {
   const color = getRoleColor(message.sender);
   const mentions = useMemo(() => extractMentions(message.content), [message.content]);
 
   return (
     <div
-      className="rounded-lg bg-gray-900 px-4 py-3 my-2"
+      className={`rounded-lg px-4 py-3 my-2 ${isLast ? "bg-gray-800/80 ring-1 ring-blue-500/20" : "bg-gray-900"}`}
       style={{ borderLeft: `3px solid ${color}` }}
     >
       {/* Header */}

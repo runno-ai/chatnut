@@ -92,13 +92,19 @@ CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, id);
 |------|------|---------|-------|
 | `ping` | — | `{db_path, status}` | Health check |
 | `init_room` | `project, name, branch?, description?` | `{id, name, project, ...}` | Idempotent |
-| `post_message` | `project, room, sender, content, message_type?` | `{id, room_id, sender, ...}` | Auto-creates room |
-| `read_messages` | `project, room, since_id?, limit?, message_type?` | `{messages[], has_more}` | Incremental polling |
+| `post_message` | `room_id, sender, content, message_type?` | `{id, room_id, sender, ...}` | Requires room_id (use init_room first) |
+| `read_messages` | `room_id, since_id?, limit?, message_type?` | `{messages[], has_more}` | Incremental polling by room_id |
 | `list_rooms` | `project?, status?` | `{rooms[]}` | Filter by project/status |
 | `list_projects` | — | `{projects[]}` | Distinct project names |
 | `archive_room` | `project, name` | `{name, archived_at}` | Soft archive |
+| `delete_room` | `room_id` | `{id, name, project, deleted_messages}` | Permanent delete (archived rooms only) |
 | `clear_room` | `project, name` | `{name, deleted_count}` | Deletes messages |
 | `search` | `query, project?` | `{rooms[], message_rooms[]}` | Room names + message content |
+
+### Breaking Changes
+
+- **`post_message`** now requires `room_id` instead of `project` + `room`. Rooms are no longer auto-created; use `init_room()` first to get a room_id, then pass it to `post_message()`.
+- **`read_messages`** now requires `room_id` instead of `project` + `room`. This prevents accidental room creation by agents and ensures messages are always routed to the correct room.
 
 ## FE Sidebar
 

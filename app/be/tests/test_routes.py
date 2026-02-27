@@ -91,6 +91,7 @@ def test_chatrooms_filter_by_branch(client, db):
 
 def test_room_messages(client, db):
     svc = ChatService(db)
+    svc.init_room("proj", "dev")
     svc.post_message("proj", "dev", "alice", "hello")
     svc.post_message("proj", "dev", "bob", "world")
     rooms = svc.list_rooms(project="proj")
@@ -104,6 +105,7 @@ def test_room_messages(client, db):
 
 def test_room_messages_since_id(client, db):
     svc = ChatService(db)
+    svc.init_room("proj", "dev")
     m1 = svc.post_message("proj", "dev", "alice", "first")
     svc.post_message("proj", "dev", "bob", "second")
     rooms = svc.list_rooms(project="proj")
@@ -114,8 +116,30 @@ def test_room_messages_since_id(client, db):
     assert msgs[0]["content"] == "second"
 
 
+def test_delete_chatroom(client, db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.archive_room("proj", "dev")
+    resp = client.delete(f"/api/chatrooms/{room['id']}")
+    assert resp.status_code == 200
+    assert resp.json()["deleted_messages"] == 0
+
+
+def test_delete_live_chatroom_returns_422(client, db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    resp = client.delete(f"/api/chatrooms/{room['id']}")
+    assert resp.status_code == 422
+
+
+def test_delete_nonexistent_chatroom_returns_404(client):
+    resp = client.delete("/api/chatrooms/nonexistent-id")
+    assert resp.status_code == 404
+
+
 def test_search(client, db):
     svc = ChatService(db)
+    svc.init_room("proj", "planning")
     svc.post_message("proj", "planning", "alice", "discuss auth feature")
     resp = client.get("/api/search", params={"q": "auth", "project": "proj"})
     assert resp.status_code == 200
@@ -132,6 +156,7 @@ async def test_stream_messages_initial_history(db):
     from team_chat_mcp.routes import message_event_generator
 
     svc = ChatService(db)
+    svc.init_room("proj", "dev")
     svc.post_message("proj", "dev", "alice", "hello")
     svc.post_message("proj", "dev", "bob", "world")
     rooms = svc.list_rooms(project="proj")
@@ -173,6 +198,7 @@ async def test_stream_messages_last_event_id(db):
     from team_chat_mcp.routes import message_event_generator
 
     svc = ChatService(db)
+    svc.init_room("proj", "dev")
     m1 = svc.post_message("proj", "dev", "alice", "first")
     m2 = svc.post_message("proj", "dev", "bob", "second")
     rooms = svc.list_rooms(project="proj")
@@ -209,6 +235,7 @@ async def test_chatroom_event_generator_initial_emission(db):
     from team_chat_mcp.routes import chatroom_event_generator
 
     svc = ChatService(db)
+    svc.init_room("proj", "dev")
     svc.post_message("proj", "dev", "alice", "hello")
     svc.post_message("proj", "dev", "bob", "world")
 
@@ -344,6 +371,7 @@ async def test_stream_messages_non_integer_last_event_id(db):
     from team_chat_mcp.routes import message_event_generator
 
     svc = ChatService(db)
+    svc.init_room("proj", "dev")
     svc.post_message("proj", "dev", "alice", "hello")
     rooms = svc.list_rooms(project="proj")
     room_id = rooms["rooms"][0]["id"]

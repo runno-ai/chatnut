@@ -135,6 +135,15 @@ def archive_room(conn: sqlite3.Connection, project: str, name: str) -> Room | No
     return get_room(conn, project, name)
 
 
+def delete_room(conn: sqlite3.Connection, room_id: str) -> int:
+    """Delete a room and all its messages. Returns number of messages deleted."""
+    with conn:
+        msg_cursor = conn.execute("DELETE FROM messages WHERE room_id=?", (room_id,))
+        msg_count = msg_cursor.rowcount
+        conn.execute("DELETE FROM rooms WHERE id=?", (room_id,))
+    return msg_count
+
+
 def insert_message(
     conn: sqlite3.Connection,
     room_id: str,
@@ -250,6 +259,55 @@ def get_all_room_stats(conn: sqlite3.Connection, room_ids: list[str]) -> dict[st
             "role_counts": role_map.get(rid, {}),
         }
     return result
+
+
+def auto_archive_stale_rooms(conn: sqlite3.Connection, max_inactive_seconds: int = 7200) -> list[Room]:
+    """Archive live rooms inactive for longer than max_inactive_seconds.
+
+    A room is stale if:
+    - It has messages and the latest message is older than the threshold, OR
+    - It has no messages and was created older than the threshold.
+
+    Returns the list of rooms that were archived.
+    """
+    cutoff = datetime.fromtimestamp(
+        datetime.now(timezone.utc).timestamp() - max_inactive_seconds, tz=timezone.utc
+    ).isoformat()
+    now = _now()
+
+    # Find live rooms where last activity is before cutoff
+    query = """
+        SELECT r.id FROM rooms r
+        WHERE r.status = 'live'
+        AND (
+            -- Rooms with messages: last message older than cutoff
+            (EXISTS (SELECT 1 FROM messages m WHERE m.room_id = r.id)
+             AND (SELECT MAX(m.created_at) FROM messages m WHERE m.room_id = r.id) < ?)
+            OR
+            -- Rooms with no messages: created before cutoff
+            (NOT EXISTS (SELECT 1 FROM messages m WHERE m.room_id = r.id)
+             AND r.created_at < ?)
+        )
+    """
+    rows = conn.execute(query, (cutoff, cutoff)).fetchall()
+    stale_ids = [row[0] for row in rows]
+
+    if not stale_ids:
+        return []
+
+    placeholders = ",".join("?" * len(stale_ids))
+    with conn:
+        conn.execute(
+            f"UPDATE rooms SET status='archived', archived_at=? WHERE id IN ({placeholders})",
+            [now, *stale_ids],
+        )
+
+    id_placeholders = ",".join("?" * len(stale_ids))
+    rows = conn.execute(
+        _room_select() + f" WHERE id IN ({id_placeholders})",
+        stale_ids,
+    ).fetchall()
+    return [_row_to_room(row) for row in rows]
 
 
 def search_rooms_and_messages(
