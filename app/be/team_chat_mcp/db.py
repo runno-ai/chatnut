@@ -6,32 +6,7 @@ import uuid
 from datetime import datetime, timezone
 
 from team_chat_mcp.models import Room, Message
-
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS rooms (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    project TEXT NOT NULL,
-    branch TEXT,
-    description TEXT,
-    status TEXT NOT NULL DEFAULT 'live',
-    created_at TEXT NOT NULL,
-    archived_at TEXT,
-    metadata TEXT,
-    UNIQUE(project, name)
-);
-
-CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    room_id TEXT NOT NULL REFERENCES rooms(id),
-    sender TEXT NOT NULL,
-    content TEXT NOT NULL,
-    message_type TEXT NOT NULL DEFAULT 'message',
-    created_at TEXT NOT NULL,
-    metadata TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, id);
-"""
+from team_chat_mcp.migrate import run_migrations
 
 ROOM_COLUMNS = ["id", "name", "project", "branch", "description", "status", "created_at", "archived_at", "metadata"]
 MSG_COLUMNS = ["id", "room_id", "sender", "content", "message_type", "created_at", "metadata"]
@@ -44,7 +19,7 @@ def init_db(db_path: str) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=5000")
     conn.execute("PRAGMA foreign_keys=ON")
-    conn.executescript(SCHEMA)
+    run_migrations(conn)
     return conn
 
 
