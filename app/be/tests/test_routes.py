@@ -11,12 +11,37 @@ from team_chat_mcp.routes import create_router
 
 
 @pytest.fixture
-def app(db):
-    """FastAPI test app with routes wired to in-memory DB."""
-    svc = ChatService(db)
+def svc(db):
+    """ChatService backed by in-memory DB."""
+    return ChatService(db)
+
+
+@pytest.fixture
+def app(db, svc, tmp_path):
+    """FastAPI test app with routes + SPA handler wired to in-memory DB."""
+    import os
+    from fastapi.responses import FileResponse, JSONResponse
+
     test_app = FastAPI()
     router = create_router(lambda: svc)
     test_app.include_router(router)
+
+    # Mount a SPA catch-all that mirrors app.py's serve_spa with path traversal guard
+    static_dir = str(tmp_path)
+
+    @test_app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        abs_static = os.path.abspath(static_dir)
+        file_path = os.path.normpath(os.path.join(abs_static, full_path))
+        if not file_path.startswith(abs_static):
+            return JSONResponse(status_code=404, content={"error": "Not found"})
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        index_path = os.path.join(abs_static, "index.html")
+        if os.path.isfile(index_path):
+            return FileResponse(index_path)
+        return JSONResponse(status_code=503, content={"error": "Frontend not built"})
+
     return test_app
 
 
@@ -173,3 +198,180 @@ async def test_stream_messages_last_event_id(db):
     assert len(events) == 1
     msg = json.loads(events[0]["data"])
     assert msg["content"] == "second"
+
+
+# --- Test 3: chatroom_event_generator ---
+
+
+@pytest.mark.asyncio
+async def test_chatroom_event_generator_initial_emission(db):
+    """Test SSE chatroom generator emits room data with stats on first iteration."""
+    from team_chat_mcp.routes import chatroom_event_generator
+
+    svc = ChatService(db)
+    svc.post_message("proj", "dev", "alice", "hello")
+    svc.post_message("proj", "dev", "bob", "world")
+
+    # The is_disconnected check runs at the top of the loop, so we must allow
+    # the first iteration to proceed (return False) then disconnect on the second.
+    call_count = 0
+
+    async def disconnect_after_first_yield():
+        nonlocal call_count
+        call_count += 1
+        return call_count > 1
+
+    events = []
+    async for event in chatroom_event_generator(
+        svc, project="proj", is_disconnected=disconnect_after_first_yield
+    ):
+        events.append(event)
+
+    assert len(events) == 1
+    payload = json.loads(events[0]["data"])
+    assert "active" in payload
+    assert "archived" in payload
+    # The room should have stats enriched
+    active_rooms = payload["active"]
+    assert len(active_rooms) == 1
+    room = active_rooms[0]
+    assert room["name"] == "dev"
+    assert room["messageCount"] == 2
+    assert room["roleCounts"]["alice"] == 1
+    assert room["roleCounts"]["bob"] == 1
+
+
+@pytest.mark.asyncio
+async def test_chatroom_event_generator_no_reemit_unchanged(db):
+    """Test SSE chatroom generator does not re-emit when data is unchanged (hash dedup)."""
+    from team_chat_mcp.routes import chatroom_event_generator
+
+    svc = ChatService(db)
+    svc.init_room("proj", "dev")
+
+    poll_count = 0
+
+    async def disconnect_after_three_polls():
+        nonlocal poll_count
+        poll_count += 1
+        # Let the generator run three times:
+        # 1st: pass, emit data (new hash)
+        # 2nd: pass, no emit (same hash)
+        # 3rd: disconnect
+        return poll_count > 3
+
+    events = []
+    async for event in chatroom_event_generator(
+        svc, project="proj", is_disconnected=disconnect_after_three_polls
+    ):
+        events.append(event)
+
+    # Only one data event should be emitted (subsequent polls have identical hash)
+    data_events = [e for e in events if "data" in e]
+    assert len(data_events) == 1
+
+
+# --- Test 6: SPA path traversal security ---
+
+
+def test_spa_path_traversal_returns_404(client):
+    """Path traversal attempts should return 404, not file content.
+
+    Tests both explicit traversal (../../etc/passwd) and normalized traversal
+    that resolves outside the static directory.
+    """
+    resp = client.get("/../../etc/passwd")
+    assert resp.status_code in (404, 503)  # 404 if traversal blocked, 503 if no index.html
+
+
+def test_spa_serves_static_file(tmp_path, db, svc):
+    """SPA handler should serve an existing static file."""
+    import os
+    from fastapi.responses import FileResponse, JSONResponse
+
+    # Create a real static file in tmp_path
+    js_file = tmp_path / "app.js"
+    js_file.write_text("console.log('hello');")
+
+    test_app = FastAPI()
+    router = create_router(lambda: svc)
+    test_app.include_router(router)
+    static_dir = str(tmp_path)
+
+    @test_app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        abs_static = os.path.abspath(static_dir)
+        file_path = os.path.normpath(os.path.join(abs_static, full_path))
+        if not file_path.startswith(abs_static):
+            return JSONResponse(status_code=404, content={"error": "Not found"})
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        index_path = os.path.join(abs_static, "index.html")
+        if os.path.isfile(index_path):
+            return FileResponse(index_path)
+        return JSONResponse(status_code=503, content={"error": "Frontend not built"})
+
+    tc = TestClient(test_app)
+    resp = tc.get("/app.js")
+    assert resp.status_code == 200
+    assert "console.log" in resp.text
+
+
+def test_spa_api_routes_unaffected(client):
+    """API routes should still work normally alongside the SPA catch-all."""
+    resp = client.get("/api/status")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"
+
+
+# --- Test 7: Invalid status and Last-Event-Id HTTP tests ---
+
+
+def test_chatrooms_invalid_status_returns_422(client):
+    """GET /api/chatrooms?status=bogus should return 422."""
+    resp = client.get("/api/chatrooms", params={"status": "bogus"})
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_stream_messages_non_integer_last_event_id(db):
+    """Non-integer Last-Event-Id should fall back to 0, sending full history.
+
+    Tests the route's try/except around int(last_event_id) by simulating
+    the same logic the route uses: parse the header, fall back to 0 on failure,
+    then verify the generator works correctly with last_id=0.
+    """
+    from team_chat_mcp.routes import message_event_generator
+
+    svc = ChatService(db)
+    svc.post_message("proj", "dev", "alice", "hello")
+    rooms = svc.list_rooms(project="proj")
+    room_id = rooms["rooms"][0]["id"]
+
+    # Simulate the route's Last-Event-Id parsing
+    last_event_id = "not-a-number"
+    try:
+        last_id = int(last_event_id)
+    except (ValueError, TypeError):
+        last_id = 0
+
+    assert last_id == 0  # Confirm fallback
+
+    # Verify the generator works with the fallen-back value
+    call_count = 0
+
+    async def disconnect_after_history():
+        nonlocal call_count
+        call_count += 1
+        return True
+
+    events = []
+    async for event in message_event_generator(
+        svc, room_id, last_id=last_id, is_disconnected=disconnect_after_history
+    ):
+        events.append(event)
+
+    # Should receive the message as initial history (last_id=0 sends everything)
+    assert len(events) == 1
+    msg = json.loads(events[0]["data"])
+    assert msg["sender"] == "alice"

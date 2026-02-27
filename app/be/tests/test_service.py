@@ -188,3 +188,110 @@ def test_search(db):
     svc.post_message("proj", "planning", "alice", "auth feature discussion")
     result = svc.search("auth", project="proj")
     assert len(result["message_rooms"]) == 1
+
+
+# --- Test 1: read_messages_by_room_id ---
+
+
+def test_read_messages_by_room_id_happy_path(db):
+    svc = ChatService(db)
+    svc.post_message("proj", "dev", "alice", "hello")
+    svc.post_message("proj", "dev", "bob", "world")
+    rooms = svc.list_rooms(project="proj")
+    room_id = rooms["rooms"][0]["id"]
+    result = svc.read_messages_by_room_id(room_id)
+    assert len(result["messages"]) == 2
+    assert result["messages"][0]["sender"] == "alice"
+    assert result["messages"][1]["sender"] == "bob"
+    assert result["has_more"] is False
+
+
+def test_read_messages_by_room_id_since_id(db):
+    svc = ChatService(db)
+    m1 = svc.post_message("proj", "dev", "alice", "first")
+    svc.post_message("proj", "dev", "bob", "second")
+    rooms = svc.list_rooms(project="proj")
+    room_id = rooms["rooms"][0]["id"]
+    result = svc.read_messages_by_room_id(room_id, since_id=m1["id"])
+    assert len(result["messages"]) == 1
+    assert result["messages"][0]["content"] == "second"
+
+
+def test_read_messages_by_room_id_limit(db):
+    svc = ChatService(db)
+    for i in range(5):
+        svc.post_message("proj", "dev", "alice", f"msg-{i}")
+    rooms = svc.list_rooms(project="proj")
+    room_id = rooms["rooms"][0]["id"]
+    result = svc.read_messages_by_room_id(room_id, limit=3)
+    assert len(result["messages"]) == 3
+    assert result["has_more"] is True
+
+
+def test_read_messages_by_room_id_message_type_filter(db):
+    svc = ChatService(db)
+    svc.post_message("proj", "dev", "system", "Room created", message_type="system")
+    svc.post_message("proj", "dev", "alice", "hello")
+    rooms = svc.list_rooms(project="proj")
+    room_id = rooms["rooms"][0]["id"]
+    result = svc.read_messages_by_room_id(room_id, message_type="message")
+    assert len(result["messages"]) == 1
+    assert result["messages"][0]["sender"] == "alice"
+
+
+def test_read_messages_by_room_id_nonexistent(db):
+    svc = ChatService(db)
+    result = svc.read_messages_by_room_id("nonexistent-room-id")
+    assert result["messages"] == []
+    assert result["has_more"] is False
+
+
+# --- Test 2: get_room_stats ---
+
+
+def test_get_room_stats_with_messages(db):
+    svc = ChatService(db)
+    svc.post_message("proj", "dev", "alice", "hello")
+    svc.post_message("proj", "dev", "bob", "world")
+    svc.post_message("proj", "dev", "alice", "again")
+    svc.post_message("proj", "dev", "system", "event", message_type="system")
+    rooms = svc.list_rooms(project="proj")
+    room_id = rooms["rooms"][0]["id"]
+    stats = svc.get_room_stats(room_id)
+    assert stats["message_count"] == 4
+    assert stats["last_message_content"] is not None
+    assert stats["last_message_ts"] is not None
+    # role_counts only includes 'message' type, not 'system'
+    assert stats["role_counts"]["alice"] == 2
+    assert stats["role_counts"]["bob"] == 1
+    assert "system" not in stats["role_counts"]
+
+
+def test_get_room_stats_empty_room(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    stats = svc.get_room_stats(room["id"])
+    assert stats["message_count"] == 0
+    assert stats["last_message_content"] is None
+    assert stats["role_counts"] == {}
+
+
+# --- Test 8: message_type validation ---
+
+
+def test_post_message_invalid_message_type(db):
+    svc = ChatService(db)
+    with pytest.raises(ValueError, match="Invalid message_type"):
+        svc.post_message("proj", "dev", "alice", "hello", message_type="invalid")
+
+
+def test_post_message_valid_message_type(db):
+    svc = ChatService(db)
+    result = svc.post_message("proj", "dev", "alice", "hello", message_type="message")
+    assert result["message_type"] == "message"
+
+
+def test_post_message_system_message_type(db):
+    svc = ChatService(db)
+    result = svc.post_message("proj", "dev", "system", "event", message_type="system")
+    assert result["message_type"] == "system"
