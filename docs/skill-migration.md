@@ -22,12 +22,12 @@ Edit `~/Library/LaunchAgents/com.portless.team-chat.plist`:
 ```xml
 <key>ProgramArguments</key>
 <array>
-    <string>/Users/tushuyang/.nvm/versions/node/v24.11.1/bin/portless</string>
+    <string>/path/to/portless</string>
     <string>team-chat</string>
-    <string>/Users/tushuyang/.local/bin/uv</string>
+    <string>/path/to/uv</string>
     <string>run</string>
     <string>--project</string>
-    <string>/Users/tushuyang/team-chat-mcp/app/be</string>
+    <string><repo-root>/app/be</string>
     <string>uvicorn</string>
     <string>team_chat_mcp.app:app</string>
     <string>--host</string>
@@ -88,7 +88,7 @@ Alternatively, add REST write endpoints (`POST /api/chatrooms/{room_id}/messages
 
 Replace bash commands with MCP tool calls:
 
-```
+```text
 ## Team Chatroom
 
 **Post your findings (via MCP):**
@@ -103,7 +103,7 @@ Replace bash commands with MCP tool calls:
 
 ### Storage section
 
-```
+```text
 Storage: SQLite database at ~/.claude/team-chat.db
 - Rooms table: UUID PK, project/name scoping, live/archived status
 - Messages table: auto-increment ID, room_id FK, sender, content, timestamps
