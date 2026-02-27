@@ -28,8 +28,8 @@ def _get_service() -> ChatService:
 # Wire MCP tools to use the same service instance as REST routes
 mcp_module.set_service_factory(_get_service)
 
-# Get MCP ASGI sub-app — path="" so MCP handles at mount root, not double-prefixed
-mcp_app = mcp.http_app(path="", transport="streamable-http")
+# Get MCP ASGI sub-app — path="/" so mount("/mcp") serves at /mcp (not /mcp/mcp)
+mcp_app = mcp.http_app(path="/", transport="streamable-http")
 
 
 @asynccontextmanager
@@ -44,7 +44,7 @@ app = FastAPI(
     lifespan=combine_lifespans(app_lifespan, mcp_app.lifespan),
 )
 
-# Mount MCP at /mcp — path="" in http_app() + mount("/mcp") = /mcp (not /mcp/mcp)
+# Mount MCP at /mcp — path="/" in http_app() + mount("/mcp") = /mcp
 app.mount("/mcp", mcp_app)
 
 # Mount API routes
