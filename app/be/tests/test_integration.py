@@ -1,0 +1,121 @@
+"""Integration tests — verify full tool flows end-to-end via ChatService."""
+
+import pytest
+from team_chat_mcp.service import ChatService
+
+
+def test_full_lifecycle(db):
+    """Room creation -> post messages -> read -> archive -> reject post."""
+    svc = ChatService(db)
+
+    # Create room
+    room = svc.init_room("proj", "integration-test")
+    assert room["status"] == "live"
+    assert room["project"] == "proj"
+
+    # Post messages
+    m1 = svc.post_message("proj", "integration-test", "alice", "hello")
+    m2 = svc.post_message("proj", "integration-test", "bob", "world")
+
+    # Read all
+    result = svc.read_messages("proj", "integration-test")
+    assert len(result["messages"]) == 2
+
+    # Read incremental
+    result = svc.read_messages("proj", "integration-test", since_id=m1["id"])
+    assert len(result["messages"]) == 1
+    assert result["messages"][0]["sender"] == "bob"
+
+    # Archive
+    archived = svc.archive_room("proj", "integration-test")
+    assert archived["archived_at"] is not None
+
+    # Verify post to archived room fails
+    with pytest.raises(ValueError, match="archived"):
+        svc.post_message("proj", "integration-test", "alice", "should fail")
+
+    # Messages still readable after archive
+    result = svc.read_messages("proj", "integration-test")
+    assert len(result["messages"]) == 2
+
+
+def test_auto_create_room_on_post(db):
+    """post_message should auto-create room if it doesn't exist."""
+    svc = ChatService(db)
+    svc.post_message("proj", "auto-room", "alice", "first message")
+
+    rooms = svc.list_rooms(project="proj")
+    names = [r["name"] for r in rooms["rooms"]]
+    assert "auto-room" in names
+
+
+def test_clear_room_preserves_room(db):
+    """clear_room deletes messages but keeps the room record."""
+    svc = ChatService(db)
+    svc.post_message("proj", "clear-test", "alice", "hello")
+    svc.post_message("proj", "clear-test", "bob", "world")
+
+    result = svc.clear_room("proj", "clear-test")
+    assert result["deleted_count"] == 2
+
+    # Room still exists
+    rooms = svc.list_rooms(project="proj")
+    names = [r["name"] for r in rooms["rooms"]]
+    assert "clear-test" in names
+
+    # No messages remain
+    msgs = svc.read_messages("proj", "clear-test")
+    assert len(msgs["messages"]) == 0
+
+
+def test_cross_project_isolation(db):
+    """Rooms with same name in different projects are independent."""
+    svc = ChatService(db)
+    svc.post_message("proj-a", "dev", "alice", "message in proj-a")
+    svc.post_message("proj-b", "dev", "bob", "message in proj-b")
+
+    result_a = svc.read_messages("proj-a", "dev")
+    result_b = svc.read_messages("proj-b", "dev")
+    assert len(result_a["messages"]) == 1
+    assert result_a["messages"][0]["sender"] == "alice"
+    assert len(result_b["messages"]) == 1
+    assert result_b["messages"][0]["sender"] == "bob"
+
+
+def test_message_types(db):
+    """System and regular messages coexist, can be filtered."""
+    svc = ChatService(db)
+    svc.post_message("proj", "dev", "system", "Room created", message_type="system")
+    svc.post_message("proj", "dev", "alice", "hello")
+    svc.post_message("proj", "dev", "bob", "world")
+
+    all_msgs = svc.read_messages("proj", "dev")
+    assert len(all_msgs["messages"]) == 3
+
+    regular_only = svc.read_messages("proj", "dev", message_type="message")
+    assert len(regular_only["messages"]) == 2
+
+    system_only = svc.read_messages("proj", "dev", message_type="system")
+    assert len(system_only["messages"]) == 1
+
+
+def test_search_across_rooms(db):
+    """Search finds matches in room names and message content."""
+    svc = ChatService(db)
+    svc.post_message("proj", "planning", "alice", "discuss auth feature")
+    svc.post_message("proj", "dev", "bob", "implement auth handler")
+    svc.post_message("proj", "ops", "charlie", "deploy staging")
+
+    result = svc.search("auth", project="proj")
+    assert len(result["message_rooms"]) == 2  # planning + dev have "auth"
+
+
+def test_list_projects(db):
+    """list_projects returns distinct project names."""
+    svc = ChatService(db)
+    svc.init_room("proj-a", "dev")
+    svc.init_room("proj-b", "staging")
+    svc.init_room("proj-a", "ops")
+
+    result = svc.list_projects()
+    assert set(result["projects"]) == {"proj-a", "proj-b"}
