@@ -1,7 +1,7 @@
 # team_chat_mcp/routes.py
 """REST + SSE endpoints for the web UI."""
 
-import asyncio
+import anyio
 import hashlib
 import json
 from typing import AsyncIterator
@@ -23,22 +23,24 @@ async def message_event_generator(
     """Async generator for SSE message events.
 
     Yields initial history (if last_id == 0) then polls for new messages.
-    Extracted from the route handler for testability.
+    DB calls are offloaded to a thread to avoid blocking the event loop.
     """
     keepalive_counter = 0
 
     if last_id == 0:
-        # Send full history first
-        result = svc.read_messages_by_room_id(room_id, limit=1000)
+        result = await anyio.to_thread.run_sync(
+            lambda: svc.read_messages_by_room_id(room_id, limit=1000)
+        )
         for msg in result["messages"]:
             yield {"id": str(msg["id"]), "data": json.dumps(msg)}
             last_id = msg["id"]
 
-    # Then poll for new messages
     while True:
         if is_disconnected and await is_disconnected():
             break
-        result = svc.read_messages_by_room_id(room_id, since_id=last_id, limit=100)
+        result = await anyio.to_thread.run_sync(
+            lambda lid=last_id: svc.read_messages_by_room_id(room_id, since_id=lid, limit=100)
+        )
         if result["messages"]:
             keepalive_counter = 0
             for msg in result["messages"]:
@@ -49,7 +51,7 @@ async def message_event_generator(
             if keepalive_counter >= int(KEEPALIVE_INTERVAL / POLL_INTERVAL):
                 keepalive_counter = 0
                 yield {"comment": "keepalive"}
-        await asyncio.sleep(POLL_INTERVAL)
+        await anyio.sleep(POLL_INTERVAL)
 
 
 async def chatroom_event_generator(
@@ -60,28 +62,35 @@ async def chatroom_event_generator(
 ) -> AsyncIterator[dict]:
     """Async generator for SSE chatroom list events.
 
-    Polls room list with stats, uses content hash for change detection.
-    Extracted from the route handler for testability.
+    Uses batch stats query (3 queries total) instead of per-room stats (3N queries).
+    DB calls are offloaded to a single thread hop per poll cycle.
     """
     last_hash = ""
     keepalive_counter = 0
     while True:
         if is_disconnected and await is_disconnected():
             break
-        result = svc.list_rooms(status="all", project=project, branch=branch)
-        rooms = result["rooms"]
+
+        # Single thread hop: list rooms + batch stats together
+        def _fetch_rooms_with_stats():
+            result = svc.list_rooms(status="all", project=project, branch=branch)
+            rooms = result["rooms"]
+            room_ids = [r["id"] for r in rooms]
+            stats = svc.get_all_room_stats(room_ids) if room_ids else {}
+            return rooms, stats
+
+        rooms, all_stats = await anyio.to_thread.run_sync(_fetch_rooms_with_stats)
         active = [r for r in rooms if r["status"] == "live"]
         archived = [r for r in rooms if r["status"] == "archived"]
 
-        # Enrich with message stats via efficient DB queries (no full message fetch)
+        # Enrich rooms with stats
         for room_dict in active + archived:
-            stats = svc.get_room_stats(room_dict["id"])
-            room_dict["messageCount"] = stats["message_count"]
-            room_dict["lastMessage"] = stats["last_message_content"]
-            room_dict["lastMessageTs"] = stats["last_message_ts"]
-            room_dict["roleCounts"] = stats["role_counts"]
+            stats = all_stats.get(room_dict["id"], {})
+            room_dict["messageCount"] = stats.get("message_count", 0)
+            room_dict["lastMessage"] = stats.get("last_message_content")
+            room_dict["lastMessageTs"] = stats.get("last_message_ts")
+            room_dict["roleCounts"] = stats.get("role_counts", {})
 
-        # Detect changes via content hash
         payload = json.dumps({"active": active, "archived": archived}, sort_keys=True)
         content_hash = hashlib.sha256(payload.encode()).hexdigest()
         if content_hash != last_hash:
@@ -90,12 +99,11 @@ async def chatroom_event_generator(
             yield {"data": payload}
         else:
             keepalive_counter += 1
-            # Send keepalive comment to prevent proxy/browser timeouts
             if keepalive_counter >= int(KEEPALIVE_INTERVAL / POLL_INTERVAL):
                 keepalive_counter = 0
                 yield {"comment": "keepalive"}
 
-        await asyncio.sleep(POLL_INTERVAL)
+        await anyio.sleep(POLL_INTERVAL)
 
 
 def create_router(get_service) -> APIRouter:
