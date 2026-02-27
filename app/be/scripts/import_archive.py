@@ -13,6 +13,7 @@ import argparse
 import json
 import os
 import re
+import sqlite3
 import sys
 import uuid
 from pathlib import Path
@@ -62,7 +63,7 @@ def parse_filename(filename: str) -> tuple[str, str] | None:
     return room_name, created_at
 
 
-def import_file(conn, filepath: Path, dry_run: bool = False) -> tuple[int, int]:
+def import_file(conn: sqlite3.Connection, filepath: Path, dry_run: bool = False) -> tuple[int, int]:
     """Import a single JSONL file. Returns (messages_imported, messages_skipped)."""
     result = parse_filename(filepath.name)
     if result is None:
@@ -124,6 +125,12 @@ def import_file(conn, filepath: Path, dry_run: bool = False) -> tuple[int, int]:
         msg = rec.get("msg", "")
         if not msg:
             continue
+        exists = conn.execute(
+            "SELECT 1 FROM messages WHERE room_id=? AND sender=? AND content=? AND created_at=?",
+            (room_id, sender, msg, ts),
+        ).fetchone()
+        if exists:
+            continue
         conn.execute(
             "INSERT INTO messages (room_id, sender, content, message_type, created_at) "
             "VALUES (?, ?, ?, 'message', ?)",
@@ -135,7 +142,7 @@ def import_file(conn, filepath: Path, dry_run: bool = False) -> tuple[int, int]:
     return imported, len(records) - imported
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Import archived JSONL chatrooms into SQLite")
     parser.add_argument(
         "--archive-dir",
