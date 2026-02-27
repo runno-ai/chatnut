@@ -1,0 +1,28 @@
+{
+  "name": "team-chat-ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@tailwindcss/typography": "^0.5.19",
+    "@tailwindcss/vite": "^4.1.18",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1",
+    "tailwindcss": "^4.1.18"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.5.2",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0",
+    "vite-plugin-singlefile": "^2.0.3"
+  }
+}
