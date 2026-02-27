@@ -217,45 +217,10 @@ def delete_messages(conn: sqlite3.Connection, room_id: str) -> int:
     return cursor.rowcount
 
 
-def get_room_stats(conn: sqlite3.Connection, room_id: str) -> dict:
-    """Get message stats for a room without fetching all messages."""
-    row = conn.execute(
-        "SELECT COUNT(*), MAX(id) FROM messages WHERE room_id=?",
-        (room_id,),
-    ).fetchone()
-    message_count = row[0]
-    max_id = row[1]
-
-    last_msg = None
-    last_ts = None
-    if max_id:
-        last_row = conn.execute(
-            "SELECT content, created_at FROM messages WHERE id=?", (max_id,)
-        ).fetchone()
-        if last_row:
-            last_msg = last_row[0][:80]
-            last_ts = last_row[1]
-
-    # Role counts (only 'message' type, not 'system')
-    role_rows = conn.execute(
-        "SELECT sender, COUNT(*) FROM messages WHERE room_id=? AND message_type='message' GROUP BY sender",
-        (room_id,),
-    ).fetchall()
-    role_counts = {row[0]: row[1] for row in role_rows}
-
-    return {
-        "message_count": message_count,
-        "last_message_id": max_id,
-        "last_message_content": last_msg,
-        "last_message_ts": last_ts,
-        "role_counts": role_counts,
-    }
-
-
 def get_all_room_stats(conn: sqlite3.Connection, room_ids: list[str]) -> dict[str, dict]:
     """Get message stats for multiple rooms in batch (3 queries total, not 3N).
 
-    Returns a dict keyed by room_id with stats matching get_room_stats() output:
+    Returns a dict keyed by room_id with stats:
     - message_count: total messages (all types)
     - last_message_id: MAX(id) across all types
     - last_message_content: content of last message (truncated to 80 chars)

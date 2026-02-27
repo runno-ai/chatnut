@@ -14,9 +14,8 @@ from team_chat_mcp.db import (
     get_messages,
     delete_messages,
     search_rooms_and_messages,
-    get_room_stats,
+    get_all_room_stats,
 )
-from team_chat_mcp.db import get_all_room_stats
 
 
 def test_init_db_creates_tables(db):
@@ -235,22 +234,6 @@ def test_search_escapes_like_wildcards(db):
     assert len(result["message_rooms"]) == 1
 
 
-def test_get_room_stats(db):
-    room = create_room(db, project="proj", name="dev")
-    insert_message(db, room.id, "alice", "hello")
-    insert_message(db, room.id, "bob", "world")
-    insert_message(db, room.id, "alice", "again")
-    insert_message(db, room.id, "system", "event", message_type="system")
-
-    stats = get_room_stats(db, room.id)
-    assert stats["message_count"] == 4
-    assert stats["last_message_id"] is not None
-    assert stats["last_message_ts"] is not None
-    assert stats["last_message_content"][:5] == "event"
-    assert stats["role_counts"]["alice"] == 2
-    assert stats["role_counts"]["bob"] == 1
-
-
 def test_list_rooms_filter_by_branch(db):
     create_room(db, project="proj", name="dev", branch="main")
     create_room(db, project="proj", name="staging", branch="feat/auth")
@@ -281,18 +264,6 @@ def test_get_messages_limit_exceeding_max_clamps_to_1000(db):
     # With only 5 messages inserted and limit clamped to 1000, all 5 are returned
     assert len(messages) == 5
     assert has_more is False
-
-
-# --- Test 5: get_room_stats empty room ---
-
-
-def test_get_room_stats_empty_room(db):
-    room = create_room(db, project="proj", name="dev")
-    stats = get_room_stats(db, room.id)
-    assert stats["message_count"] == 0
-    assert stats["last_message_id"] is None
-    assert stats["last_message_content"] is None
-    assert stats["role_counts"] == {}
 
 
 def test_get_all_room_stats(db):

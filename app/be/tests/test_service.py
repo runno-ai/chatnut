@@ -246,34 +246,27 @@ def test_read_messages_by_room_id_nonexistent(db):
     assert result["has_more"] is False
 
 
-# --- Test 2: get_room_stats ---
+# --- Test 2: get_all_room_stats ---
 
 
-def test_get_room_stats_with_messages(db):
+def test_get_all_room_stats(db):
     svc = ChatService(db)
-    svc.post_message("proj", "dev", "alice", "hello")
-    svc.post_message("proj", "dev", "bob", "world")
-    svc.post_message("proj", "dev", "alice", "again")
-    svc.post_message("proj", "dev", "system", "event", message_type="system")
+    svc.post_message("proj", "room1", "alice", "hello")
+    svc.post_message("proj", "room1", "bob", "world")
+    svc.post_message("proj", "room2", "carol", "hi there")
+    svc.post_message("proj", "room2", "system", "joined", message_type="system")
     rooms = svc.list_rooms(project="proj")
-    room_id = rooms["rooms"][0]["id"]
-    stats = svc.get_room_stats(room_id)
-    assert stats["message_count"] == 4
-    assert stats["last_message_content"] is not None
-    assert stats["last_message_ts"] is not None
-    # role_counts only includes 'message' type, not 'system'
-    assert stats["role_counts"]["alice"] == 2
-    assert stats["role_counts"]["bob"] == 1
-    assert "system" not in stats["role_counts"]
-
-
-def test_get_room_stats_empty_room(db):
-    svc = ChatService(db)
-    room = svc.init_room("proj", "dev")
-    stats = svc.get_room_stats(room["id"])
-    assert stats["message_count"] == 0
-    assert stats["last_message_content"] is None
-    assert stats["role_counts"] == {}
+    room_ids = [r["id"] for r in rooms["rooms"]]
+    stats = svc.get_all_room_stats(room_ids)
+    assert len(stats) == 2
+    r1_id = next(r["id"] for r in rooms["rooms"] if r["name"] == "room1")
+    r2_id = next(r["id"] for r in rooms["rooms"] if r["name"] == "room2")
+    assert stats[r1_id]["message_count"] == 2
+    assert stats[r1_id]["role_counts"] == {"alice": 1, "bob": 1}
+    assert stats[r2_id]["message_count"] == 2
+    # last_message_content is by MAX(id) — the system "joined" message has highest id
+    assert stats[r2_id]["last_message_content"] == "joined"
+    assert stats[r2_id]["role_counts"] == {"carol": 1}
 
 
 # --- Test 8: message_type validation ---
