@@ -67,10 +67,12 @@ describe("useChatrooms", () => {
       ({ project }) => useChatrooms(project),
       { initialProps: { project: "proj-a" as string | undefined } }
     );
+    const firstES = lastCreatedES!;
 
     rerender({ project: "proj-b" });
     expect(result.current.loading).toBe(true);
     expect(result.current.active).toEqual([]);
+    expect(firstES.readyState).toBe(2);
   });
 
   it("retries connection on error", () => {

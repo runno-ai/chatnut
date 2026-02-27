@@ -4,7 +4,7 @@
 import anyio
 import hashlib
 import json
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from sse_starlette.sse import EventSourceResponse
@@ -76,7 +76,7 @@ async def chatroom_event_generator(
             break
 
         # Single thread hop: list rooms + batch stats together
-        def _fetch_rooms_with_stats():
+        def _fetch_rooms_with_stats() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
             result = svc.list_rooms(status="all", project=project, branch=branch)
             rooms = result["rooms"]
             room_ids = [r["id"] for r in rooms]

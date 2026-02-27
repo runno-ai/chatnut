@@ -169,6 +169,7 @@ describe("useSSE", () => {
 
   it("handles malformed JSON without crashing", () => {
     const { result } = renderHook(() => useSSE("room-123"));
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     act(() => {
       lastCreatedES?._triggerOpen();
@@ -181,5 +182,7 @@ describe("useSSE", () => {
 
     expect(result.current.messages).toEqual([]);
     expect(result.current.connectionStatus).toBe("connected");
+    expect(warnSpy).toHaveBeenCalledWith("useSSE: failed to parse message JSON");
+    warnSpy.mockRestore();
   });
 });

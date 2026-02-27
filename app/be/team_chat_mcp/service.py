@@ -86,6 +86,11 @@ class ChatService:
         }
 
     def get_all_room_stats(self, room_ids: list[str]) -> dict[str, dict]:
+        """Get message stats for multiple rooms in batch (3 queries total).
+
+        Returns a dict keyed by room_id with stats for all input room_ids,
+        including rooms with no messages (zeroed stats).
+        """
         return db_get_all_room_stats(self.db, room_ids)
 
     def list_rooms(self, status: str = "live", project: str | None = None, branch: str | None = None) -> dict:
