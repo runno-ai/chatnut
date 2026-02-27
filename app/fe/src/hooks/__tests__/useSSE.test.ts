@@ -168,6 +168,25 @@ describe("useSSE", () => {
     expect(es.readyState).toBe(2);
   });
 
+  it("does not reconnect after unmount when retry is pending", () => {
+    vi.useFakeTimers();
+    const { unmount } = renderHook(() => useSSE("room-123"));
+    const firstES = lastCreatedES!;
+
+    act(() => {
+      firstES._triggerError(); // schedules retry
+    });
+
+    unmount(); // should clear retry timer
+
+    const beforeAdvance = lastCreatedES;
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+
+    expect(lastCreatedES).toBe(beforeAdvance); // no new EventSource
+  });
+
   it("handles malformed JSON without crashing", () => {
     const { result } = renderHook(() => useSSE("room-123"));
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
