@@ -1,0 +1,232 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+language: en-US
+tone_instructions: >
+  Be concise and technical. Focus on correctness, performance, and security.
+  Skip praise and filler. Flag violations of project patterns directly.
+
+early_access: true
+
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
+  high_level_summary_instructions: |
+    Focus on: SQLite schema/query changes, FastAPI/FastMCP integration, SSE streaming,
+    service layer correctness, React hook patterns, state management.
+    Flag: breaking changes, missing tests, pattern violations, SQL injection,
+    API contract mismatches between MCP tools and REST endpoints.
+
+    ## CRITICAL: Architecture
+    This project is a unified FastAPI process serving:
+    - MCP tools at /mcp/ (via FastMCP HTTP transport)
+    - REST endpoints at /api/
+    - SSE streams at /api/stream/
+    - Static React SPA at /*
+    All layers share a single ChatService instance. MCP tools and REST routes
+    MUST go through the service layer — never touch the DB directly.
+
+    ## CRITICAL: Documentation Convention
+    This project uses CLAUDE.md and DESIGN.md at the root for documentation.
+    Plans live in docs/plans/. Do NOT flag missing README files.
+    - PREFER updating existing docs over suggesting new ones
+    - Check if CLAUDE.md or DESIGN.md need updates based on code changes
+
+    ## CRITICAL: Test Coverage Assessment
+    - New functions MUST have unit tests
+    - Modified functions MUST have updated test assertions
+    - Flag missing or stale tests as CRITICAL issues
+    - Backend tests use pytest with in-memory SQLite
+    - Test levels: L1 = unit (CI-safe), L2 = integration (DB)
+
+    ## Actionable Tasks
+    ALWAYS end the summary with an "Actionable Tasks" section using exactly this format:
+
+    ### Actionable Tasks
+
+    **CRITICAL**
+    - [ ] (list each critical issue as a checkbox item — blocking, must fix before merge)
+
+    **SUGGESTION**
+    - [ ] (list each non-blocking suggestion as a checkbox item — improvements, nice-to-haves)
+
+    If no items exist for a level, write "None" instead of checkboxes.
+    Every inline comment you leave MUST appear in one of these two lists.
+
+    **What to EXCLUDE:** Do NOT include verification, validation, or run tasks.
+    Never list items like: "Run pytest", "Verify the migration works", "Test the endpoint manually".
+  collapse_walkthrough: true
+  estimate_code_review_effort: false
+  auto_apply_labels: true
+  suggested_reviewers: false
+  poem: false
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false
+    base_branches:
+      - main
+
+  path_filters:
+    - '!CLAUDE.md'
+    - '!.claude/**'
+    - '!**/node_modules/**'
+    - '!**/__pycache__/**'
+    - '!**/.venv/**'
+    - '!**/dist/**'
+    - '!**/*.lock'
+    - '!**/bun.lockb'
+    - '!uv.lock'
+    - '!docs/plans/archived/**'
+
+  path_instructions:
+    # === Global Review Requirements ===
+    - path: 'app/**'
+      instructions: |
+        CRITICAL REVIEW REQUIREMENTS - Apply to every PR:
+
+        1. **Architecture**:
+           - Layering: mcp.py / routes.py → service.py → db.py, models.py
+           - MCP tools and REST routes MUST go through ChatService (never direct DB)
+           - Single shared ChatService instance (via set_service_factory pattern)
+           - SQLite with WAL mode, check_same_thread=False, busy_timeout=5000
+
+        2. **Test Coverage**:
+           - New public functions MUST have unit tests
+           - Modified functions MUST have updated test assertions
+           - Request changes if test coverage is insufficient
+
+    # === Backend: Python/FastAPI ===
+    - path: 'app/be/team_chat_mcp/db.py'
+      instructions: |
+        SQLite schema, migrations, and query layer. Verify:
+        - All queries use parameterized ? placeholders (no string interpolation)
+        - LIKE queries use _escape_like() for user input
+        - init_db sets WAL, foreign_keys, busy_timeout PRAGMAs
+        - Room PK is UUID, with UNIQUE(project, name) constraint
+        - INSERT OR IGNORE for idempotent room creation
+        - limit+1 pagination pattern for has_more detection
+
+    - path: 'app/be/team_chat_mcp/service.py'
+      instructions: |
+        ChatService business logic layer. Verify:
+        - All public methods return dicts (not model objects)
+        - Input validation at service boundary (message_type, status)
+        - Archived room rejection for post_message
+        - No direct SQL — delegates to db.py functions
+
+    - path: 'app/be/team_chat_mcp/mcp.py'
+      instructions: |
+        FastMCP tool definitions (thin wrappers over ChatService). Verify:
+        - Tools use _service_factory() set by app.py (not own DB connection)
+        - Tool docstrings are clear (shown to LLM agents)
+        - No business logic in tools — delegate to ChatService
+
+    - path: 'app/be/team_chat_mcp/app.py'
+      instructions: |
+        FastAPI application entry point. Verify:
+        - mcp.http_app(path="") + app.mount("/mcp") to avoid double prefix
+        - combine_lifespans for FastMCP session manager
+        - Single _get_service() shared with MCP via set_service_factory
+        - SPA catch-all has path traversal protection (normpath + startswith)
+        - Frontend-not-built returns 503 (not 200)
+
+    - path: 'app/be/team_chat_mcp/routes.py'
+      instructions: |
+        REST + SSE endpoints for the web UI. Verify:
+        - Routes use service layer (never direct DB access)
+        - SSE generators extracted for testability (is_disconnected callback)
+        - hashlib for deterministic SSE change detection (not hash())
+        - Last-Event-Id parsing handles non-integer values gracefully
+        - Invalid query params return 422 (not 500)
+        - Keepalive comments every 15s to prevent proxy timeouts
+
+    - path: 'app/be/**/*.py'
+      instructions: |
+        Python backend code. Verify:
+        - Type hints on function signatures
+        - No unsafe string formatting in SQL queries
+        - Proper error handling (ValueError for validation, not bare exceptions)
+
+    # === Frontend: React/TypeScript ===
+    - path: 'app/fe/src/hooks/**'
+      instructions: |
+        React hooks for data fetching and SSE. Verify:
+        - useEffect cleanup closes EventSource connections
+        - SSE hooks have reconnection logic (retry on error)
+        - AbortController for cancellable fetch requests
+        - useRef initialized with explicit value (React 19 strict)
+        - State reset when filter dependencies change
+        - No empty catch blocks (at least console.warn in dev)
+
+    - path: 'app/fe/src/components/**'
+      instructions: |
+        React components. Verify:
+        - Proper TypeScript types (no bare JSX.Element, use React.ReactElement)
+        - Positioned ancestors for absolutely-positioned children
+        - Falsy checks don't render literal 0 (use explicit > 0)
+        - setTimeout/setInterval cleaned up in effect returns
+        - Abort signal checked before state updates in async callbacks
+
+    - path: 'app/fe/src/**/*.ts'
+      instructions: |
+        TypeScript code. Verify:
+        - Types match API response shapes from backend
+        - No 'any' without justification
+        - useRef<T | null>(null) pattern (not useRef<T>() without arg)
+
+    # === Tests ===
+    - path: 'app/be/tests/**'
+      instructions: |
+        Backend tests (pytest + in-memory SQLite). Verify:
+        - New production code has corresponding tests
+        - Tests use the shared `db` fixture from conftest.py
+        - Edge cases tested (empty results, boundary values, error paths)
+        - Async tests use @pytest.mark.asyncio
+        - SSE generators tested via direct async iteration
+        Flag as CRITICAL if test coverage is insufficient.
+
+    # === Documentation ===
+    - path: 'DESIGN.md'
+      instructions: |
+        Project design document. Verify:
+        - Content reflects current implementation
+        - Schema matches actual db.py CREATE TABLE statements
+        - Architecture diagram matches actual FastAPI mount structure
+        - MCP tool signatures match actual mcp.py definitions
+        Flag as CRITICAL if documentation contradicts implementation.
+
+    - path: 'docs/plans/*.md'
+      instructions: |
+        Implementation plans. Verify:
+        - Plans in docs/plans/ are active/pending
+        - Executed plans should be in docs/plans/archived/
+
+  finishing_touches:
+    docstrings:
+      enabled: true
+    unit_tests:
+      enabled: true
+
+  tools:
+    github-checks:
+      timeout_ms: 300000
+    ruff:
+      enabled: true
+    markdownlint:
+      enabled: true
+    shellcheck:
+      enabled: true
+    gitleaks:
+      enabled: true
+
+knowledge_base:
+  opt_out: false
+  learnings:
+    scope: local
+  code_guidelines:
+    enabled: true
+
+chat:
+  auto_reply: true
