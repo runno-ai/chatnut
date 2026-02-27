@@ -25,6 +25,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe("useSSE", () => {
@@ -140,7 +142,6 @@ describe("useSSE", () => {
 
     // A new EventSource should have been created
     expect(lastCreatedES).not.toBe(firstES);
-    vi.useRealTimers();
   });
 
   it("closes the old EventSource on room change", () => {

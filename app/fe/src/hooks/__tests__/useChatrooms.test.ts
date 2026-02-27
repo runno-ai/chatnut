@@ -20,6 +20,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe("useChatrooms", () => {
@@ -91,7 +93,23 @@ describe("useChatrooms", () => {
 
     // A new EventSource should have been created
     expect(lastCreatedES).not.toBe(firstES);
-    vi.useRealTimers();
+  });
+
+  it("warns and keeps state stable on malformed SSE JSON", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { result } = renderHook(() => useChatrooms());
+
+    act(() => {
+      lastCreatedES?._emit("{invalid-json");
+    });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "useChatrooms: failed to parse message JSON"
+    );
+    expect(result.current.active).toEqual([]);
+    expect(result.current.archived).toEqual([]);
+    expect(result.current.loading).toBe(true);
+    warnSpy.mockRestore();
   });
 
   it("closes the EventSource on unmount", () => {
