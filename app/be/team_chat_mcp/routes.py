@@ -2,10 +2,11 @@
 """REST + SSE endpoints for the web UI."""
 
 import asyncio
+import hashlib
 import json
 from typing import AsyncIterator
 
-from fastapi import APIRouter, Header, Query, Request
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from sse_starlette.sse import EventSourceResponse
 
 
@@ -82,7 +83,7 @@ async def chatroom_event_generator(
 
         # Detect changes via content hash
         payload = json.dumps({"active": active, "archived": archived}, sort_keys=True)
-        content_hash = str(hash(payload))
+        content_hash = hashlib.sha256(payload.encode()).hexdigest()
         if content_hash != last_hash:
             last_hash = content_hash
             keepalive_counter = 0
@@ -115,7 +116,10 @@ def create_router(get_service) -> APIRouter:
         branch: str | None = None,
         status: str = "live",
     ):
-        return get_service().list_rooms(status=status, project=project, branch=branch)
+        try:
+            return get_service().list_rooms(status=status, project=project, branch=branch)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
 
     @router.get("/chatrooms/{room_id}/messages")
     def room_messages(
@@ -152,7 +156,10 @@ def create_router(get_service) -> APIRouter:
         last_event_id: str | None = Header(None, alias="Last-Event-Id"),
     ):
         svc = get_service()
-        last_id = int(last_event_id) if last_event_id else 0
+        try:
+            last_id = int(last_event_id) if last_event_id else 0
+        except (ValueError, TypeError):
+            last_id = 0
         gen = message_event_generator(
             svc, room_id, last_id=last_id,
             is_disconnected=request.is_disconnected,

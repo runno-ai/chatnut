@@ -1,22 +1,29 @@
 """FastMCP tool definitions — thin wrappers over ChatService."""
 
 import os
-from functools import lru_cache
+from typing import Callable
 
 from fastmcp import FastMCP
 
-from team_chat_mcp.db import init_db
 from team_chat_mcp.service import ChatService
 
 mcp = FastMCP("team-chat")
 
 DB_PATH = os.path.expanduser(os.environ.get("CHAT_DB_PATH", "~/.claude/team-chat.db"))
 
+_service_factory: Callable[[], ChatService] | None = None
 
-@lru_cache(maxsize=1)
+
+def set_service_factory(factory: Callable[[], ChatService]) -> None:
+    """Set the service factory used by all MCP tool handlers."""
+    global _service_factory
+    _service_factory = factory
+
+
 def _get_service() -> ChatService:
-    db_conn = init_db(DB_PATH)
-    return ChatService(db_conn)
+    if _service_factory is None:
+        raise RuntimeError("Service factory not set — call set_service_factory() before using MCP tools")
+    return _service_factory()
 
 
 @mcp.tool()

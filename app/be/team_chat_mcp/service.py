@@ -18,6 +18,7 @@ from team_chat_mcp.db import (
 
 
 VALID_ROOM_STATUSES = {"live", "archived", "all"}
+VALID_MESSAGE_TYPES = {"message", "system"}
 
 
 class ChatService:
@@ -42,6 +43,8 @@ class ChatService:
         content: str,
         message_type: str = "message",
     ) -> dict:
+        if message_type not in VALID_MESSAGE_TYPES:
+            raise ValueError(f"Invalid message_type '{message_type}' — must be one of {VALID_MESSAGE_TYPES}")
         room_obj = create_room(self.db, project=project, name=room)
         if room_obj.status == "archived":
             raise ValueError(f"Room '{room}' in project '{project}' is archived — cannot post messages")

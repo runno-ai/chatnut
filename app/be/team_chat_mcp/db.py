@@ -42,6 +42,7 @@ def init_db(db_path: str) -> sqlite3.Connection:
         os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
     conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.executescript(SCHEMA)
     return conn
@@ -282,7 +283,7 @@ def search_rooms_and_messages(
     if project:
         msg_query += " AND r.project=?"
         msg_params.append(project)
-    msg_query += " GROUP BY m.room_id LIMIT ?"
+    msg_query += " GROUP BY m.room_id ORDER BY match_count DESC, m.room_id ASC LIMIT ?"
     msg_params.append(limit)
     msg_rows = conn.execute(msg_query, msg_params).fetchall()
     message_rooms = [{"room_id": row[0], "match_count": row[1]} for row in msg_rows]
