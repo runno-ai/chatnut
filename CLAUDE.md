@@ -165,6 +165,15 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, id);
 ```
 
+## CI
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on push to `main` and on PRs:
+
+| Job | Steps |
+|-----|-------|
+| **Backend Tests** | `uv sync --extra test` + `pytest -x` |
+| **Frontend** | `bun install` + `tsc --noEmit` + `vitest run` + `vite build` |
+
 ## Design Decisions
 
 - **Single FastAPI process** — MCP + REST + SSE + static serving, one language, shared ChatService
