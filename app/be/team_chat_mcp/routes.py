@@ -13,6 +13,10 @@ from sse_starlette.sse import EventSourceResponse
 POLL_INTERVAL = 0.5
 KEEPALIVE_INTERVAL = 15  # seconds between keepalive comments
 
+# Thread safety: Python's sqlite3 module serializes access internally
+# (SQLITE_THREADSAFE=1 default). Combined with WAL mode + busy_timeout=5000,
+# concurrent reads from multiple SSE generators are safe without a Python-level lock.
+
 
 async def message_event_generator(
     svc,
