@@ -73,6 +73,9 @@ cd app/fe && bun run dev
 
 # Frontend build (single-file dist/index.html)
 cd app/fe && bun run build
+
+# Frontend tests
+cd app/fe && bun run test
 ```
 
 ## Environment Variables
@@ -162,6 +165,15 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, id);
 ```
 
+## CI
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on push to `main` and on PRs:
+
+| Job | Steps |
+|-----|-------|
+| **Backend Tests** | `uv sync --extra test` + `pytest -x` |
+| **Frontend** | `bun install` + `tsc --noEmit` + `vitest run` + `vite build` |
+
 ## Design Decisions
 
 - **Single FastAPI process** — MCP + REST + SSE + static serving, one language, shared ChatService
@@ -169,7 +181,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, id);
 - **UUID room PK** — same room name allowed across projects via `UNIQUE(project, name)`
 - **SQLite WAL mode** — concurrent reads (SSE polling) don't block MCP writes
 - **SSE for push** — unidirectional, auto-reconnect, Last-Event-Id for resume
-- **`get_room_stats()` for SSE** — efficient COUNT/MAX queries instead of fetching all messages
+- **`get_all_room_stats()` batch for SSE** — 3 queries total (not 3N per-room) via batch COUNT/MAX/GROUP BY
 - **`_escape_like()` for search** — escapes SQL LIKE wildcards in user input
 - **No ORM** — direct sqlite3, schema is 2 tables
 - **`since_id` for incremental reads** — agents poll with last-seen message ID

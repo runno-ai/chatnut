@@ -29,7 +29,9 @@ export function useChatrooms(project?: string) {
           setActive(data.active);
           setArchived(data.archived);
           setLoading(false);
-        } catch {}
+        } catch {
+          console.warn("useChatrooms: failed to parse message JSON");
+        }
       };
 
       es.onerror = () => {

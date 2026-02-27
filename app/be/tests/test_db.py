@@ -14,7 +14,7 @@ from team_chat_mcp.db import (
     get_messages,
     delete_messages,
     search_rooms_and_messages,
-    get_room_stats,
+    get_all_room_stats,
 )
 
 
@@ -234,22 +234,6 @@ def test_search_escapes_like_wildcards(db):
     assert len(result["message_rooms"]) == 1
 
 
-def test_get_room_stats(db):
-    room = create_room(db, project="proj", name="dev")
-    insert_message(db, room.id, "alice", "hello")
-    insert_message(db, room.id, "bob", "world")
-    insert_message(db, room.id, "alice", "again")
-    insert_message(db, room.id, "system", "event", message_type="system")
-
-    stats = get_room_stats(db, room.id)
-    assert stats["message_count"] == 4
-    assert stats["last_message_id"] is not None
-    assert stats["last_message_ts"] is not None
-    assert stats["last_message_content"][:5] == "event"
-    assert stats["role_counts"]["alice"] == 2
-    assert stats["role_counts"]["bob"] == 1
-
-
 def test_list_rooms_filter_by_branch(db):
     create_room(db, project="proj", name="dev", branch="main")
     create_room(db, project="proj", name="staging", branch="feat/auth")
@@ -282,13 +266,61 @@ def test_get_messages_limit_exceeding_max_clamps_to_1000(db):
     assert has_more is False
 
 
-# --- Test 5: get_room_stats empty room ---
+def test_get_all_room_stats(db):
+    r1 = create_room(db, project="proj", name="room1")
+    r2 = create_room(db, project="proj", name="room2")
+    insert_message(db, r1.id, "alice", "hello")
+    insert_message(db, r1.id, "bob", "world")
+    insert_message(db, r2.id, "carol", "hi there")
+    insert_message(db, r2.id, "system", "joined", message_type="system")
+
+    stats = get_all_room_stats(db, [r1.id, r2.id])
+    assert len(stats) == 2
+
+    s1 = stats[r1.id]
+    assert s1["message_count"] == 2
+    assert s1["last_message_id"] is not None
+    assert s1["last_message_ts"] is not None
+    assert s1["last_message_content"] == "world"
+    assert s1["role_counts"] == {"alice": 1, "bob": 1}
+
+    s2 = stats[r2.id]
+    assert s2["message_count"] == 2
+    assert s2["last_message_ts"] is not None
+    # last_message_content is by MAX(id) across ALL types — the system "joined"
+    # message was inserted after "hi there", so it has the highest id
+    assert s2["last_message_content"] == "joined"
+    # role_counts only counts message_type='message', excludes system
+    assert s2["role_counts"] == {"carol": 1}
 
 
-def test_get_room_stats_empty_room(db):
-    room = create_room(db, project="proj", name="dev")
-    stats = get_room_stats(db, room.id)
-    assert stats["message_count"] == 0
-    assert stats["last_message_id"] is None
-    assert stats["last_message_content"] is None
-    assert stats["role_counts"] == {}
+def test_get_all_room_stats_empty_rooms(db):
+    r1 = create_room(db, project="proj", name="empty1")
+    r2 = create_room(db, project="proj", name="empty2")
+
+    stats = get_all_room_stats(db, [r1.id, r2.id])
+    assert len(stats) == 2
+    for rid in [r1.id, r2.id]:
+        assert stats[rid]["message_count"] == 0
+        assert stats[rid]["last_message_id"] is None
+        assert stats[rid]["last_message_ts"] is None
+        assert stats[rid]["last_message_content"] is None
+        assert stats[rid]["role_counts"] == {}
+
+
+def test_get_all_room_stats_mixed(db):
+    """Mix of rooms with and without messages — both must appear in results."""
+    r1 = create_room(db, project="proj", name="active")
+    r2 = create_room(db, project="proj", name="empty")
+    insert_message(db, r1.id, "alice", "hello")
+
+    stats = get_all_room_stats(db, [r1.id, r2.id])
+    assert stats[r1.id]["message_count"] == 1
+    assert stats[r1.id]["last_message_content"] == "hello"
+    assert stats[r2.id]["message_count"] == 0
+    assert stats[r2.id]["last_message_content"] is None
+
+
+def test_get_all_room_stats_empty_list(db):
+    stats = get_all_room_stats(db, [])
+    assert stats == {}

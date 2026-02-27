@@ -13,7 +13,7 @@ from team_chat_mcp.db import (
     get_messages as db_get_messages,
     delete_messages,
     search_rooms_and_messages,
-    get_room_stats as db_get_room_stats,
+    get_all_room_stats as db_get_all_room_stats,
 )
 
 
@@ -85,8 +85,13 @@ class ChatService:
             "has_more": has_more,
         }
 
-    def get_room_stats(self, room_id: str) -> dict:
-        return db_get_room_stats(self.db, room_id)
+    def get_all_room_stats(self, room_ids: list[str]) -> dict[str, dict]:
+        """Get message stats for multiple rooms in batch (3 queries total).
+
+        Returns a dict keyed by room_id with stats for all input room_ids,
+        including rooms with no messages (zeroed stats).
+        """
+        return db_get_all_room_stats(self.db, room_ids)
 
     def list_rooms(self, status: str = "live", project: str | None = None, branch: str | None = None) -> dict:
         if status not in VALID_ROOM_STATUSES:

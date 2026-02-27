@@ -6,32 +6,7 @@ import uuid
 from datetime import datetime, timezone
 
 from team_chat_mcp.models import Room, Message
-
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS rooms (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    project TEXT NOT NULL,
-    branch TEXT,
-    description TEXT,
-    status TEXT NOT NULL DEFAULT 'live',
-    created_at TEXT NOT NULL,
-    archived_at TEXT,
-    metadata TEXT,
-    UNIQUE(project, name)
-);
-
-CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    room_id TEXT NOT NULL REFERENCES rooms(id),
-    sender TEXT NOT NULL,
-    content TEXT NOT NULL,
-    message_type TEXT NOT NULL DEFAULT 'message',
-    created_at TEXT NOT NULL,
-    metadata TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, id);
-"""
+from team_chat_mcp.migrate import run_migrations
 
 ROOM_COLUMNS = ["id", "name", "project", "branch", "description", "status", "created_at", "archived_at", "metadata"]
 MSG_COLUMNS = ["id", "room_id", "sender", "content", "message_type", "created_at", "metadata"]
@@ -44,7 +19,7 @@ def init_db(db_path: str) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=5000")
     conn.execute("PRAGMA foreign_keys=ON")
-    conn.executescript(SCHEMA)
+    run_migrations(conn)
     return conn
 
 
@@ -217,39 +192,64 @@ def delete_messages(conn: sqlite3.Connection, room_id: str) -> int:
     return cursor.rowcount
 
 
-def get_room_stats(conn: sqlite3.Connection, room_id: str) -> dict:
-    """Get message stats for a room without fetching all messages."""
-    row = conn.execute(
-        "SELECT COUNT(*), MAX(id) FROM messages WHERE room_id=?",
-        (room_id,),
-    ).fetchone()
-    message_count = row[0]
-    max_id = row[1]
+def get_all_room_stats(conn: sqlite3.Connection, room_ids: list[str]) -> dict[str, dict]:
+    """Get message stats for multiple rooms in batch (3 queries total, not 3N).
 
-    last_msg = None
-    last_ts = None
-    if max_id:
-        last_row = conn.execute(
-            "SELECT content, created_at FROM messages WHERE id=?", (max_id,)
-        ).fetchone()
-        if last_row:
-            last_msg = last_row[0][:80]
-            last_ts = last_row[1]
+    Returns a dict keyed by room_id with stats:
+    - message_count: total messages (all types)
+    - last_message_id: MAX(id) across all types
+    - last_message_content: content of last message (truncated to 80 chars)
+    - last_message_ts: timestamp of last message
+    - role_counts: {sender: count} for message_type='message' only
 
-    # Role counts (only 'message' type, not 'system')
-    role_rows = conn.execute(
-        "SELECT sender, COUNT(*) FROM messages WHERE room_id=? AND message_type='message' GROUP BY sender",
-        (room_id,),
+    Note: SQLite limits parameterized queries to 999 variables. For typical usage
+    (< 100 rooms) this is not a concern.
+    """
+    if not room_ids:
+        return {}
+
+    placeholders = ",".join("?" * len(room_ids))
+
+    # Query 1: counts and max_id per room
+    count_rows = conn.execute(
+        f"SELECT room_id, COUNT(*), MAX(id) FROM messages WHERE room_id IN ({placeholders}) GROUP BY room_id",
+        room_ids,
     ).fetchall()
-    role_counts = {row[0]: row[1] for row in role_rows}
+    count_map = {row[0]: {"count": row[1], "max_id": row[2]} for row in count_rows}
 
-    return {
-        "message_count": message_count,
-        "last_message_id": max_id,
-        "last_message_content": last_msg,
-        "last_message_ts": last_ts,
-        "role_counts": role_counts,
-    }
+    # Query 2: last message content/timestamp (one max_id per room = no ambiguity)
+    max_ids = [v["max_id"] for v in count_map.values() if v["max_id"] is not None]
+    last_msg_map: dict[str, tuple[str, str]] = {}
+    if max_ids:
+        id_placeholders = ",".join("?" * len(max_ids))
+        last_rows = conn.execute(
+            f"SELECT room_id, content, created_at FROM messages WHERE id IN ({id_placeholders})",
+            max_ids,
+        ).fetchall()
+        last_msg_map = {row[0]: (row[1][:80], row[2]) for row in last_rows}
+
+    # Query 3: role counts per room (only 'message' type, excludes 'system')
+    role_rows = conn.execute(
+        f"SELECT room_id, sender, COUNT(*) FROM messages WHERE room_id IN ({placeholders}) AND message_type='message' GROUP BY room_id, sender",
+        room_ids,
+    ).fetchall()
+    role_map: dict[str, dict[str, int]] = {}
+    for row in role_rows:
+        role_map.setdefault(row[0], {})[row[1]] = row[2]
+
+    # Assemble results for all requested rooms (including those with no messages)
+    result: dict[str, dict] = {}
+    for rid in room_ids:
+        counts = count_map.get(rid, {"count": 0, "max_id": None})
+        last = last_msg_map.get(rid)
+        result[rid] = {
+            "message_count": counts["count"],
+            "last_message_id": counts["max_id"],
+            "last_message_content": last[0] if last else None,
+            "last_message_ts": last[1] if last else None,
+            "role_counts": role_map.get(rid, {}),
+        }
+    return result
 
 
 def search_rooms_and_messages(

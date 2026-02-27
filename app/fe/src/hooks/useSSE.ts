@@ -51,7 +51,9 @@ export function useSSE(roomId: string | null) {
               setMessages((prev) => [...prev, ...batch]);
             });
           }
-        } catch {}
+        } catch {
+          console.warn("useSSE: failed to parse message JSON");
+        }
       };
 
       es.addEventListener("reset", () => {
