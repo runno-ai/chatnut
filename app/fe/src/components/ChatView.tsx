@@ -17,6 +17,7 @@ export function ChatView({ room, roomName, isLive }: ChatViewProps) {
   const [staticMessages, setStaticMessages] = useState<ChatMessage[]>([]);
   const [loadingStatic, setLoadingStatic] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const lastMessageRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [newCount, setNewCount] = useState(0);
@@ -44,8 +45,7 @@ export function ChatView({ room, roomName, isLive }: ChatViewProps) {
         if (!controller.signal.aborted) {
           setStaticMessages(data.messages ?? []);
           requestAnimationFrame(() => {
-            const el = containerRef.current;
-            if (el) el.scrollTop = el.scrollHeight;
+            lastMessageRef.current?.scrollIntoView({ block: "start" });
           });
         }
       })
@@ -74,7 +74,7 @@ export function ChatView({ room, roomName, isLive }: ChatViewProps) {
     if (messages.length > prevMessageCount.current) {
       const added = messages.length - prevMessageCount.current;
       if (isAtBottom) {
-        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+        lastMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       } else {
         setNewCount((c) => c + added);
       }
@@ -82,14 +82,13 @@ export function ChatView({ room, roomName, isLive }: ChatViewProps) {
     prevMessageCount.current = messages.length;
   }, [messages.length, isAtBottom]);
 
-  // Scroll to bottom on room change (focus on latest messages)
+  // Scroll to last message on room change
   useEffect(() => {
     prevMessageCount.current = 0;
     setNewCount(0);
     setIsAtBottom(true);
     scrollTimeoutRef.current = setTimeout(() => {
-      const el = containerRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
+      lastMessageRef.current?.scrollIntoView({ block: "start" });
     }, 50);
     return () => {
       if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
@@ -97,7 +96,7 @@ export function ChatView({ room, roomName, isLive }: ChatViewProps) {
   }, [room]);
 
   const scrollToBottom = () => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    lastMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     setNewCount(0);
   };
 
@@ -138,7 +137,9 @@ export function ChatView({ room, roomName, isLive }: ChatViewProps) {
           <div className="text-gray-600 text-sm py-4">No messages yet.</div>
         )}
         {messages.map((msg, i) => (
-          <Message key={msg.id} message={msg} isLast={i === messages.length - 1} />
+          <div key={msg.id} ref={i === messages.length - 1 ? lastMessageRef : undefined}>
+            <Message message={msg} isLast={i === messages.length - 1} />
+          </div>
         ))}
         <div ref={bottomRef} />
       </div>

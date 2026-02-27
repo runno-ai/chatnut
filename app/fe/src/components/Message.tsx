@@ -46,7 +46,7 @@ export function Message({ message, isLast }: MessageProps) {
         <span className="text-sm font-semibold" style={{ color }}>
           {message.sender}
         </span>
-        <span className="text-xs text-gray-600">
+        <span className="text-xs text-gray-500">
           {formatTimestamp(message.created_at)}
         </span>
         {mentions.length > 0 && (

@@ -357,7 +357,7 @@ function RoomItem({
             type="button"
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
             aria-label={`Delete room ${room.name}`}
-            className="shrink-0 ml-auto p-0.5 rounded text-gray-600 hover:text-red-400 hover:bg-red-400/10 transition-colors opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+            className="shrink-0 p-0.5 rounded text-gray-600 hover:text-red-400 hover:bg-red-400/10 transition-colors opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
             title="Delete room"
           >
             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -365,7 +365,7 @@ function RoomItem({
             </svg>
           </button>
         )}
-        <span className={`text-xs text-gray-600 shrink-0 ${onDelete ? "group-hover:opacity-0 transition-opacity" : "ml-auto"}`}>
+        <span className="text-xs text-gray-600 shrink-0 ml-auto">
           {timeStr}
         </span>
       </div>
