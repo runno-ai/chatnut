@@ -9,6 +9,11 @@ export function useSSE(roomId: string | null) {
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("connecting");
   const esRef = useRef<EventSource | null>(null);
+  const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Batch incoming messages with requestAnimationFrame
+  const pendingRef = useRef<ChatMessage[]>([]);
+  const rafScheduledRef = useRef(false);
 
   useEffect(() => {
     if (!roomId) {
@@ -17,36 +22,63 @@ export function useSSE(roomId: string | null) {
       return;
     }
 
+    let closed = false;
     setMessages([]);
     setConnectionStatus("connecting");
 
-    const es = new EventSource(
-      `/api/stream/messages?room_id=${encodeURIComponent(roomId)}`
-    );
-    esRef.current = es;
+    function connect() {
+      if (closed) return;
 
-    es.onopen = () => {
-      setConnectionStatus("connected");
-    };
+      const es = new EventSource(
+        `/api/stream/messages?room_id=${encodeURIComponent(roomId!)}`
+      );
+      esRef.current = es;
 
-    es.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data) as ChatMessage;
-        setMessages((prev) => [...prev, msg]);
-      } catch {}
-    };
+      es.onopen = () => {
+        if (!closed) setConnectionStatus("connected");
+      };
 
-    es.addEventListener("reset", () => {
-      setMessages([]);
-    });
+      es.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data) as ChatMessage;
+          pendingRef.current.push(msg);
+          if (!rafScheduledRef.current) {
+            rafScheduledRef.current = true;
+            requestAnimationFrame(() => {
+              const batch = pendingRef.current;
+              pendingRef.current = [];
+              rafScheduledRef.current = false;
+              setMessages((prev) => [...prev, ...batch]);
+            });
+          }
+        } catch {}
+      };
 
-    es.onerror = () => {
-      setConnectionStatus("disconnected");
-    };
+      es.addEventListener("reset", () => {
+        setMessages([]);
+      });
+
+      es.onerror = () => {
+        es.close();
+        esRef.current = null;
+        if (closed) {
+          setConnectionStatus("disconnected");
+        } else {
+          setConnectionStatus("connecting");
+          retryRef.current = setTimeout(connect, 3000);
+        }
+      };
+    }
+
+    connect();
 
     return () => {
-      es.close();
+      closed = true;
+      esRef.current?.close();
       esRef.current = null;
+      if (retryRef.current) clearTimeout(retryRef.current);
+      retryRef.current = null;
+      setConnectionStatus("disconnected");
     };
   }, [roomId]);
 

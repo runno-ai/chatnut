@@ -16,10 +16,20 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
 
   const { active, archived, loading } = useChatrooms(
-    selectedProject ?? undefined,
-    selectedBranch ?? undefined
+    selectedProject ?? undefined
   );
   const projects = useProjects(active, archived);
+
+  // Derive branches from unfiltered rooms (before branch filter)
+  const branches = [...new Set([...active, ...archived].map((r) => r.branch).filter(Boolean))] as string[];
+
+  // Client-side branch filtering
+  const filteredActive = selectedBranch
+    ? active.filter((r) => r.branch === selectedBranch)
+    : active;
+  const filteredArchived = selectedBranch
+    ? archived.filter((r) => r.branch === selectedBranch)
+    : archived;
   const { result: searchResult, loading: searchLoading } = useSearch(
     searchQuery,
     selectedProject ?? undefined
@@ -60,8 +70,9 @@ export default function App() {
   return (
     <div className="flex h-screen bg-gray-950 text-gray-100 overflow-hidden">
       <Sidebar
-        active={active}
-        archived={archived}
+        active={filteredActive}
+        archived={filteredArchived}
+        branches={branches}
         loading={loading}
         selectedRoom={selectedRoom}
         collapsed={sidebarCollapsed}

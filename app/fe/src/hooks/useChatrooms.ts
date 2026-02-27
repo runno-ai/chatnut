@@ -2,21 +2,24 @@
 import { useState, useEffect, useRef } from "react";
 import type { ChatroomInfo, ChatroomsResponse } from "../types";
 
-export function useChatrooms(project?: string, branch?: string) {
+export function useChatrooms(project?: string) {
   const [active, setActive] = useState<ChatroomInfo[]>([]);
   const [archived, setArchived] = useState<ChatroomInfo[]>([]);
   const [loading, setLoading] = useState(true);
-  const retryRef = useRef<ReturnType<typeof setTimeout>>();
+  const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let es: EventSource | null = null;
     let closed = false;
 
+    setLoading(true);
+    setActive([]);
+    setArchived([]);
+
     function connect() {
       if (closed) return;
       const params = new URLSearchParams();
       if (project) params.set("project", project);
-      if (branch) params.set("branch", branch);
       const qs = params.toString();
       es = new EventSource(`/api/stream/chatrooms${qs ? `?${qs}` : ""}`);
 
@@ -44,7 +47,7 @@ export function useChatrooms(project?: string, branch?: string) {
       es?.close();
       if (retryRef.current) clearTimeout(retryRef.current);
     };
-  }, [project, branch]);
+  }, [project]);
 
   return { active, archived, loading };
 }

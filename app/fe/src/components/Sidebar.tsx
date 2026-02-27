@@ -5,6 +5,7 @@ import { getRoleColor } from "../utils/roleColors";
 interface SidebarProps {
   active: ChatroomInfo[];
   archived: ChatroomInfo[];
+  branches: string[];
   loading: boolean;
   selectedRoom: string | null;
   collapsed: boolean;
@@ -45,6 +46,7 @@ function formatRelativeTime(ts?: string): string {
 export function Sidebar({
   active,
   archived,
+  branches,
   loading,
   selectedRoom,
   collapsed,
@@ -76,9 +78,6 @@ export function Sidebar({
       </div>
     );
   }
-
-  // Derive available branches from all rooms (active + archived)
-  const branches = [...new Set([...active, ...archived].map((r) => r.branch).filter(Boolean))] as string[];
 
   // Sort active: by last message time (newest first)
   const sortedActive = [...active].sort((a, b) => {
@@ -282,7 +281,7 @@ function RoomItem({
           </span>
         )}
         <span className="text-sm font-medium truncate">{room.name}</span>
-        {matchCount && (
+        {matchCount != null && matchCount > 0 && (
           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">
             {matchCount} match{matchCount > 1 ? "es" : ""}
           </span>

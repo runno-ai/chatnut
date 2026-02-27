@@ -21,6 +21,7 @@ export function ChatView({ room, roomName, isLive }: ChatViewProps) {
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [newCount, setNewCount] = useState(0);
   const prevMessageCount = useRef(0);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const messages = isLive ? liveMessages : staticMessages;
 
@@ -40,12 +41,18 @@ export function ChatView({ room, roomName, isLive }: ChatViewProps) {
         return res.json();
       })
       .then((data) => {
-        setStaticMessages(data.messages || []);
+        if (!controller.signal.aborted) {
+          setStaticMessages(data.messages ?? []);
+        }
       })
       .catch((err) => {
         if (err.name !== "AbortError") setStaticMessages([]);
       })
-      .finally(() => setLoadingStatic(false));
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setLoadingStatic(false);
+        }
+      });
     return () => controller.abort();
   }, [room, isLive]);
 
@@ -76,9 +83,12 @@ export function ChatView({ room, roomName, isLive }: ChatViewProps) {
     prevMessageCount.current = 0;
     setNewCount(0);
     setIsAtBottom(false);
-    setTimeout(() => {
+    scrollTimeoutRef.current = setTimeout(() => {
       containerRef.current?.scrollTo(0, 0);
     }, 50);
+    return () => {
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    };
   }, [room]);
 
   const scrollToBottom = () => {
@@ -95,7 +105,7 @@ export function ChatView({ room, roomName, isLive }: ChatViewProps) {
   }
 
   return (
-    <div className="flex-1 flex flex-col min-w-0">
+    <div className="flex-1 flex flex-col min-w-0 relative">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-800 bg-gray-900/50">
         <h2 className="text-sm font-semibold text-gray-200">{roomName}</h2>
