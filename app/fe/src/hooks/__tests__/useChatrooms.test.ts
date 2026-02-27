@@ -91,4 +91,13 @@ describe("useChatrooms", () => {
     expect(lastCreatedES).not.toBe(firstES);
     vi.useRealTimers();
   });
+
+  it("closes the EventSource on unmount", () => {
+    const { unmount } = renderHook(() => useChatrooms());
+    const es = lastCreatedES;
+    expect(es).not.toBeNull();
+
+    unmount();
+    expect(es!.readyState).toBe(2);
+  });
 });

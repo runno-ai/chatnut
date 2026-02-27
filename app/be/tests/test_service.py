@@ -262,8 +262,12 @@ def test_get_all_room_stats(db):
     r1_id = next(r["id"] for r in rooms["rooms"] if r["name"] == "room1")
     r2_id = next(r["id"] for r in rooms["rooms"] if r["name"] == "room2")
     assert stats[r1_id]["message_count"] == 2
+    assert stats[r1_id]["last_message_id"] is not None
+    assert stats[r1_id]["last_message_ts"] is not None
     assert stats[r1_id]["role_counts"] == {"alice": 1, "bob": 1}
     assert stats[r2_id]["message_count"] == 2
+    assert stats[r2_id]["last_message_id"] is not None
+    assert stats[r2_id]["last_message_ts"] is not None
     # last_message_content is by MAX(id) — the system "joined" message has highest id
     assert stats[r2_id]["last_message_content"] == "joined"
     assert stats[r2_id]["role_counts"] == {"carol": 1}
