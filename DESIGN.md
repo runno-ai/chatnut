@@ -122,7 +122,8 @@ CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, id);
 | MCP transport | HTTP (mounted in FastAPI) | Always-on needed for web UI anyway |
 | Room PK | UUID (generated) | Same room name allowed across projects |
 | Push mechanism | SSE | Unidirectional, auto-reconnect, Last-Event-Id |
-| SSE efficiency | `get_room_stats()` | COUNT/MAX queries instead of fetching all messages |
+| SSE efficiency | `get_all_room_stats()` batch | 3 queries total (not 3N per-room) via batch COUNT/MAX/GROUP BY |
+| SSE thread safety | `anyio.to_thread.run_sync()` | Offloads sync SQLite to thread pool, single hop per poll cycle |
 | Search | SQL LIKE with `_escape_like()` | Simple, adequate for team chat volumes |
 | Polling interval | 500ms | Balance between responsiveness and load |
 | Keepalive | 15s comment | Prevents proxy/browser timeouts on idle SSE |

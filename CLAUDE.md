@@ -73,6 +73,9 @@ cd app/fe && bun run dev
 
 # Frontend build (single-file dist/index.html)
 cd app/fe && bun run build
+
+# Frontend tests
+cd app/fe && bun run test
 ```
 
 ## Environment Variables
