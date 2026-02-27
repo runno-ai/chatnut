@@ -30,9 +30,13 @@ export class MockEventSource {
 
   // --- Test helpers ---
 
-  /** Simulate a message event (triggers onmessage) */
+  /** Simulate a message event (triggers onmessage + addEventListener listeners) */
   _emit(data: string) {
-    this.onmessage?.(new MessageEvent("message", { data }));
+    const event = new MessageEvent("message", { data });
+    this.onmessage?.(event);
+    for (const listener of this.listeners["message"] ?? []) {
+      listener(event);
+    }
   }
 
   /** Simulate a named event (triggers addEventListener listeners) */
@@ -42,14 +46,23 @@ export class MockEventSource {
     }
   }
 
-  /** Simulate connection open */
+  /** Simulate connection open (triggers onopen + addEventListener listeners) */
   _triggerOpen() {
     this.readyState = 1;
-    this.onopen?.(new Event("open"));
+    const event = new Event("open");
+    this.onopen?.(event);
+    for (const listener of this.listeners["open"] ?? []) {
+      listener(event);
+    }
   }
 
-  /** Simulate connection error */
+  /** Simulate connection error (sets readyState=CLOSED, triggers onerror + addEventListener listeners) */
   _triggerError() {
-    this.onerror?.(new Event("error"));
+    this.readyState = 2;
+    const event = new Event("error");
+    this.onerror?.(event);
+    for (const listener of this.listeners["error"] ?? []) {
+      listener(event);
+    }
   }
 }

@@ -142,4 +142,44 @@ describe("useSSE", () => {
     expect(lastCreatedES).not.toBe(firstES);
     vi.useRealTimers();
   });
+
+  it("closes the old EventSource on room change", () => {
+    const { rerender } = renderHook(
+      ({ roomId }) => useSSE(roomId),
+      { initialProps: { roomId: "room-1" as string | null } }
+    );
+
+    const firstES = lastCreatedES!;
+    expect(firstES.readyState).not.toBe(2);
+
+    // Change rooms — old ES should be closed
+    rerender({ roomId: "room-2" });
+    expect(firstES.readyState).toBe(2);
+    expect(lastCreatedES).not.toBe(firstES);
+  });
+
+  it("closes the EventSource on unmount", () => {
+    const { unmount } = renderHook(() => useSSE("room-123"));
+    const es = lastCreatedES!;
+    expect(es.readyState).not.toBe(2);
+
+    unmount();
+    expect(es.readyState).toBe(2);
+  });
+
+  it("handles malformed JSON without crashing", () => {
+    const { result } = renderHook(() => useSSE("room-123"));
+
+    act(() => {
+      lastCreatedES?._triggerOpen();
+    });
+
+    // Emit invalid JSON — should not throw or add messages
+    act(() => {
+      lastCreatedES?._emit("not json");
+    });
+
+    expect(result.current.messages).toEqual([]);
+    expect(result.current.connectionStatus).toBe("connected");
+  });
 });
