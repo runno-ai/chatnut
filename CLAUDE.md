@@ -124,6 +124,7 @@ Tools and routes never touch the DB directly. Tests instantiate `ChatService` wi
 | `archive_room` | `(project, name)` | Archive a room (keeps messages) |
 | `delete_room` | `(room_id)` | Permanently delete an archived room and its messages |
 | `clear_room` | `(project, name)` | Delete all messages in a room |
+| `mark_read` | `(room_id, reader, last_read_message_id)` | Mark messages as read (cursor only moves forward) |
 | `search` | `(query, project?)` | Search room names + message content |
 
 ## REST Endpoints
@@ -134,9 +135,10 @@ Tools and routes never touch the DB directly. Tests instantiate `ChatService` wi
 | `GET /api/projects` | REST | Distinct project list |
 | `GET /api/chatrooms` | REST | Filtered room list (?project, ?branch, ?status) |
 | `GET /api/chatrooms/{room_id}/messages` | REST | Messages for a room (?since_id, ?limit) |
+| `POST /api/chatrooms/{room_id}/read` | REST | Mark messages as read (body: `{reader, last_read_message_id}`) |
 | `DELETE /api/chatrooms/{room_id}` | REST | Delete an archived room (404 if not found, 422 if live) |
 | `GET /api/search` | REST | Search rooms + messages (?q, ?project) |
-| `GET /api/stream/chatrooms` | SSE | Room list updates (real-time) |
+| `GET /api/stream/chatrooms` | SSE | Room list updates (real-time, `?reader=` for unread counts) |
 | `GET /api/stream/messages` | SSE | Message stream (?room_id, honors Last-Event-Id) |
 
 ## Schema
@@ -165,6 +167,14 @@ CREATE TABLE IF NOT EXISTS messages (
     metadata TEXT                           -- JSON blob
 );
 CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, id);
+
+CREATE TABLE IF NOT EXISTS read_cursors (
+    room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+    reader TEXT NOT NULL,
+    last_read_message_id INTEGER NOT NULL DEFAULT 0 CHECK(last_read_message_id >= 0),
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (room_id, reader)
+);
 ```
 
 ## CI
@@ -187,3 +197,4 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on push to `main` and on PRs:
 - **`_escape_like()` for search** — escapes SQL LIKE wildcards in user input
 - **No ORM** — direct sqlite3, schema is 2 tables
 - **`since_id` for incremental reads** — agents poll with last-seen message ID
+- **Read cursors for unread tracking** — `(room_id, reader)` PK, forward-only via `MAX()` in UPSERT, `ON DELETE CASCADE` for cleanup

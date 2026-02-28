@@ -6,6 +6,22 @@ import { useChatrooms } from "./hooks/useChatrooms";
 import { useProjects } from "./hooks/useProjects";
 import { useSearch } from "./hooks/useSearch";
 
+const READER_STORAGE_KEY = "tc:reader-id";
+let volatileReaderId: string | null = null;
+
+function getOrCreateReaderId(): string {
+  try {
+    const existing = localStorage.getItem(READER_STORAGE_KEY);
+    if (existing) return existing;
+    const created = crypto.randomUUID();
+    localStorage.setItem(READER_STORAGE_KEY, created);
+    return created;
+  } catch {
+    if (!volatileReaderId) volatileReaderId = crypto.randomUUID();
+    return volatileReaderId;
+  }
+}
+
 const SIDEBAR_MIN = 200;
 const SIDEBAR_MAX = 500;
 const SIDEBAR_DEFAULT = 280;
@@ -22,12 +38,14 @@ function ssSet(key: string, v: string | null) {
 }
 
 export default function App() {
+  const readerId = useMemo(() => getOrCreateReaderId(), []);
   const [selectedProject, setSelectedProject] = useState<string | null>(ssGet(SS_PROJECT));
   const [selectedBranch, setSelectedBranch] = useState<string | null>(ssGet(SS_BRANCH));
   const [searchQuery, setSearchQuery] = useState("");
 
   const { active, archived, loading } = useChatrooms(
-    selectedProject ?? undefined
+    selectedProject ?? undefined,
+    readerId
   );
   const projects = useProjects();
 
@@ -131,6 +149,7 @@ export default function App() {
           [...active, ...archived].find((r) => r.id === selectedRoom)?.name ?? selectedRoom
         }
         isLive={isLive}
+        reader={readerId}
       />
     </div>
   );

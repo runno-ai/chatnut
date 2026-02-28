@@ -12,3 +12,12 @@ async def test_all_tools_registered():
     tool_names = {t.name for t in tools}
     expected = {"ping", "init_room", "post_message", "read_messages", "list_rooms", "archive_room", "delete_room", "clear_room", "search", "list_projects"}
     assert expected.issubset(tool_names), f"Missing tools: {expected - tool_names}"
+
+
+@pytest.mark.anyio
+async def test_mark_read_tool_registered():
+    """Verify mark_read is in the tool list."""
+    from team_chat_mcp.mcp import mcp
+    tools = await mcp.list_tools()
+    tool_names = [t.name for t in tools]
+    assert "mark_read" in tool_names

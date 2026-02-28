@@ -84,6 +84,14 @@ CREATE TABLE IF NOT EXISTS messages (
     metadata TEXT                           -- JSON blob
 );
 CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, id);
+
+CREATE TABLE IF NOT EXISTS read_cursors (
+    room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+    reader TEXT NOT NULL,
+    last_read_message_id INTEGER NOT NULL DEFAULT 0 CHECK(last_read_message_id >= 0),
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (room_id, reader)
+);
 ```
 
 ## MCP Tools
@@ -99,6 +107,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, id);
 | `archive_room` | `project, name` | `{name, archived_at}` | Soft archive |
 | `delete_room` | `room_id` | `{id, name, project, deleted_messages}` | Permanent delete (archived rooms only) |
 | `clear_room` | `project, name` | `{name, deleted_count}` | Deletes messages |
+| `mark_read` | `room_id, reader, last_read_message_id` | `{room_id, reader, last_read_message_id}` | Forward-only cursor per reader |
 | `search` | `query, project?` | `{rooms[], message_rooms[]}` | Room names + message content |
 
 ### Breaking Changes
@@ -135,6 +144,8 @@ CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, id);
 | Keepalive | 15s comment | Prevents proxy/browser timeouts on idle SSE |
 | message_type | `message`, `system` | Two types sufficient for team chat |
 | metadata | JSON text column | Extensible without migrations |
+| Read cursors | `(room_id, reader)` PK, forward-only `MAX()` UPSERT | Per-reader unread tracking without auth |
+| Unread count query | `LEFT JOIN read_cursors` + `COUNT(id > cursor)` | Single query, all message types counted |
 | Bun server | Deleted | Replaced entirely by FastAPI |
 
 ## What's NOT Changing

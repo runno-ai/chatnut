@@ -7,6 +7,7 @@ import json
 from typing import Any, AsyncIterator
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
+from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 
@@ -62,12 +63,14 @@ async def chatroom_event_generator(
     svc,
     project: str | None = None,
     branch: str | None = None,
+    reader: str | None = None,
     is_disconnected=None,
 ) -> AsyncIterator[dict]:
     """Async generator for SSE chatroom list events.
 
     Uses batch stats query (3 queries total) instead of per-room stats (3N queries).
     DB calls are offloaded to a single thread hop per poll cycle.
+    If reader is provided, each room is enriched with unreadCount for that reader.
     """
     last_hash = ""
     keepalive_counter = 0
@@ -75,15 +78,18 @@ async def chatroom_event_generator(
         if is_disconnected and await is_disconnected():
             break
 
-        # Single thread hop: list rooms + batch stats together
-        def _fetch_rooms_with_stats() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
+        # Single thread hop: list rooms + batch stats + unread counts together
+        # CRITICAL: get_unread_counts must run inside this closure (thread context)
+        # because SQLite connections are not safe to use across async boundaries.
+        def _fetch_rooms_with_stats() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, int]]:
             result = svc.list_rooms(status="all", project=project, branch=branch)
             rooms = result["rooms"]
             room_ids = [r["id"] for r in rooms]
             stats = svc.get_all_room_stats(room_ids) if room_ids else {}
-            return rooms, stats
+            unread = svc.get_unread_counts(room_ids, reader) if reader and room_ids else {}
+            return rooms, stats, unread
 
-        rooms, all_stats = await anyio.to_thread.run_sync(_fetch_rooms_with_stats)
+        rooms, all_stats, unread_counts = await anyio.to_thread.run_sync(_fetch_rooms_with_stats)
         active = [r for r in rooms if r["status"] == "live"]
         archived = [r for r in rooms if r["status"] == "archived"]
 
@@ -94,6 +100,8 @@ async def chatroom_event_generator(
             room_dict["lastMessage"] = stats.get("last_message_content")
             room_dict["lastMessageTs"] = stats.get("last_message_ts")
             room_dict["roleCounts"] = stats.get("role_counts", {})
+            if reader:
+                room_dict["unreadCount"] = unread_counts.get(room_dict["id"], 0)
 
         payload = json.dumps({"active": active, "archived": archived}, sort_keys=True)
         content_hash = hashlib.sha256(payload.encode()).hexdigest()
@@ -108,6 +116,11 @@ async def chatroom_event_generator(
                 yield {"comment": "keepalive"}
 
         await anyio.sleep(POLL_INTERVAL)
+
+
+class MarkReadRequest(BaseModel):
+    reader: str
+    last_read_message_id: int
 
 
 def create_router(get_service) -> APIRouter:
@@ -153,6 +166,15 @@ def create_router(get_service) -> APIRouter:
             status = 404 if "not found" in msg else 422
             raise HTTPException(status_code=status, detail=msg) from e
 
+    @router.post("/chatrooms/{room_id}/read")
+    def mark_read(room_id: str, body: MarkReadRequest):
+        try:
+            return get_service().mark_read(room_id, body.reader, body.last_read_message_id)
+        except ValueError as e:
+            msg = str(e)
+            status = 404 if "not found" in msg else 422
+            raise HTTPException(status_code=status, detail=msg) from e
+
     @router.get("/search")
     def search(q: str, project: str | None = None):
         return get_service().search(q, project=project)
@@ -162,10 +184,11 @@ def create_router(get_service) -> APIRouter:
         request: Request,
         project: str | None = None,
         branch: str | None = None,
+        reader: str | None = None,
     ):
         svc = get_service()
         gen = chatroom_event_generator(
-            svc, project=project, branch=branch,
+            svc, project=project, branch=branch, reader=reader,
             is_disconnected=request.is_disconnected,
         )
         return EventSourceResponse(gen)

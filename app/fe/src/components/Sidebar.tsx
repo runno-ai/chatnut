@@ -347,6 +347,11 @@ function RoomItem({
           </span>
         )}
         <span className="text-sm font-medium truncate">{room.name}</span>
+        {room.unreadCount != null && room.unreadCount > 0 && (
+          <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold rounded-full bg-blue-500 text-white shrink-0">
+            {room.unreadCount > 99 ? "99+" : room.unreadCount}
+          </span>
+        )}
         {matchCount != null && matchCount > 0 && (
           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">
             {matchCount} match{matchCount > 1 ? "es" : ""}

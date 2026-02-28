@@ -23,6 +23,7 @@ export interface ChatroomInfo {
   lastMessage?: string;
   lastMessageTs?: string;
   roleCounts?: Record<string, number>;
+  unreadCount?: number;
 }
 
 export interface ChatroomsResponse {

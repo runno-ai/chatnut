@@ -428,6 +428,94 @@ def test_auto_archive_mixed_rooms(db):
     assert live["rooms"][0]["name"] == "active"
 
 
+# --- mark_read and get_unread_counts ---
+
+
+def test_mark_read(db):
+    """mark_read advances cursor and returns updated position."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.post_message("proj", "dev", "alice", "hello")
+    m2 = svc.post_message("proj", "dev", "alice", "world")
+    result = svc.mark_read(room["id"], "bob", m2["id"])
+    assert result["room_id"] == room["id"]
+    assert result["reader"] == "bob"
+    assert result["last_read_message_id"] == m2["id"]
+
+
+def test_mark_read_nonexistent_room(db):
+    svc = ChatService(db)
+    with pytest.raises(ValueError, match="not found"):
+        svc.mark_read("nonexistent", "bob", 1)
+
+
+def test_mark_read_empty_reader(db):
+    """mark_read rejects empty reader string."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    with pytest.raises(ValueError, match="non-empty"):
+        svc.mark_read(room["id"], "", 1)
+    with pytest.raises(ValueError, match="non-empty"):
+        svc.mark_read(room["id"], "   ", 1)
+
+
+def test_mark_read_negative_cursor(db):
+    """mark_read rejects negative last_read_message_id."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    with pytest.raises(ValueError, match=">= 0"):
+        svc.mark_read(room["id"], "bob", -1)
+
+
+def test_mark_read_beyond_max_message_id(db):
+    """mark_read with cursor beyond max message ID is accepted (forward-only design)."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.post_message("proj", "dev", "alice", "hello")
+    # Set cursor far beyond actual max — this is valid by design
+    result = svc.mark_read(room["id"], "bob", 99999)
+    assert result["last_read_message_id"] == 99999
+    # Unread count should be 0 (cursor is past all messages)
+    counts = svc.get_unread_counts([room["id"]], "bob")
+    assert counts[room["id"]] == 0
+
+
+def test_mark_read_cursor_does_not_regress(db):
+    """Forward-only: marking read at lower ID does not move cursor backward."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    m1 = svc.post_message("proj", "dev", "alice", "first")
+    m2 = svc.post_message("proj", "dev", "alice", "second")
+
+    svc.mark_read(room["id"], "bob", m2["id"])
+    result = svc.mark_read(room["id"], "bob", m1["id"])
+
+    assert result["last_read_message_id"] == m2["id"]
+
+
+def test_get_unread_counts_service(db):
+    svc = ChatService(db)
+    r1 = svc.init_room("proj", "room1")
+    r2 = svc.init_room("proj", "room2")
+    svc.post_message("proj", "room1", "alice", "msg1")
+    m1_2 = svc.post_message("proj", "room1", "alice", "msg2")
+    svc.post_message("proj", "room2", "bob", "msg1")
+    svc.mark_read(r1["id"], "viewer", m1_2["id"])
+    result = svc.get_unread_counts([r1["id"], r2["id"]], "viewer")
+    assert result[r1["id"]] == 0
+    assert result[r2["id"]] == 1
+
+
+def test_get_unread_counts_no_reader(db):
+    """All messages unread when reader has no cursors."""
+    svc = ChatService(db)
+    r = svc.init_room("proj", "dev")
+    svc.post_message("proj", "dev", "alice", "hello")
+    svc.post_message("proj", "dev", "alice", "world")
+    result = svc.get_unread_counts([r["id"]], "new-reader")
+    assert result[r["id"]] == 2
+
+
 def test_db_delete_room_transactional(db):
     """L1: db.delete_room deletes messages and room in one transaction."""
     from team_chat_mcp.db import create_room, insert_message, delete_room, get_room_by_id, get_messages

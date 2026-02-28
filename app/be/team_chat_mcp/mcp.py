@@ -99,3 +99,13 @@ def clear_room(project: str, name: str) -> dict:
 def search(query: str, project: str | None = None) -> dict:
     """Search room names and message content. Optionally filter by project."""
     return _get_service().search(query, project=project)
+
+
+@mcp.tool()
+def mark_read(
+    room_id: str,
+    reader: str,
+    last_read_message_id: int,
+) -> dict:
+    """Mark messages as read up to the given message ID for a reader. Cursor only moves forward."""
+    return _get_service().mark_read(room_id, reader, last_read_message_id)

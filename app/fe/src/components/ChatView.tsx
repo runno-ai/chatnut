@@ -8,9 +8,10 @@ interface ChatViewProps {
   room: string | null;
   roomName: string | null;
   isLive: boolean;
+  reader?: string;
 }
 
-export function ChatView({ room, roomName, isLive }: ChatViewProps) {
+export function ChatView({ room, roomName, isLive, reader }: ChatViewProps) {
   const { messages: liveMessages, connectionStatus } = useSSE(
     isLive ? room : null
   );
@@ -94,6 +95,17 @@ export function ChatView({ room, roomName, isLive }: ChatViewProps) {
       if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
     };
   }, [room]);
+
+  // Auto mark-read when viewing messages at the bottom
+  useEffect(() => {
+    if (!room || !reader || messages.length === 0 || !isAtBottom) return;
+    const lastMsg = messages[messages.length - 1];
+    fetch(`/api/chatrooms/${encodeURIComponent(room)}/read`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reader, last_read_message_id: lastMsg.id }),
+    }).catch(() => {}); // fire-and-forget
+  }, [room, reader, messages.length, isAtBottom]);
 
   const scrollToBottom = () => {
     lastMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });

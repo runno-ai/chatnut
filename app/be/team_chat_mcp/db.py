@@ -140,6 +140,7 @@ def delete_room(conn: sqlite3.Connection, room_id: str) -> int:
     with conn:
         msg_cursor = conn.execute("DELETE FROM messages WHERE room_id=?", (room_id,))
         msg_count = msg_cursor.rowcount
+        delete_read_cursors(conn, room_id)
         conn.execute("DELETE FROM rooms WHERE id=?", (room_id,))
     return msg_count
 
@@ -198,6 +199,7 @@ def get_messages(
 def delete_messages(conn: sqlite3.Connection, room_id: str) -> int:
     with conn:
         cursor = conn.execute("DELETE FROM messages WHERE room_id=?", (room_id,))
+        delete_read_cursors(conn, room_id)
     return cursor.rowcount
 
 
@@ -308,6 +310,77 @@ def auto_archive_stale_rooms(conn: sqlite3.Connection, max_inactive_seconds: int
         stale_ids,
     ).fetchall()
     return [_row_to_room(row) for row in rows]
+
+
+def upsert_read_cursor(
+    conn: sqlite3.Connection,
+    room_id: str,
+    reader: str,
+    last_read_message_id: int,
+) -> None:
+    """Set or advance a reader's cursor. Cursor only moves forward."""
+    now = _now()
+    with conn:
+        conn.execute(
+            """INSERT INTO read_cursors (room_id, reader, last_read_message_id, updated_at)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(room_id, reader) DO UPDATE
+               SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id),
+                   updated_at = CASE WHEN excluded.last_read_message_id > last_read_message_id
+                                     THEN excluded.updated_at ELSE updated_at END""",
+            (room_id, reader, last_read_message_id, now),
+        )
+
+
+def get_read_cursor(
+    conn: sqlite3.Connection,
+    room_id: str,
+    reader: str,
+) -> int | None:
+    """Get a reader's cursor position. Returns None if no cursor exists."""
+    row = conn.execute(
+        "SELECT last_read_message_id FROM read_cursors WHERE room_id=? AND reader=?",
+        (room_id, reader),
+    ).fetchone()
+    return row[0] if row else None
+
+
+def get_unread_counts(
+    conn: sqlite3.Connection,
+    room_ids: list[str],
+    reader: str,
+) -> dict[str, int]:
+    """Get unread message counts for multiple rooms for a given reader.
+
+    Uses a single query: LEFT JOIN read_cursors to get each room's cursor,
+    then COUNT messages with id > cursor (or all messages if no cursor).
+    Returns dict keyed by room_id -> unread count (0 for rooms with no messages).
+    """
+    if not room_ids:
+        return {}
+
+    placeholders = ",".join("?" * len(room_ids))
+    rows = conn.execute(
+        f"""SELECT m.room_id, COUNT(*) as unread
+            FROM messages m
+            LEFT JOIN read_cursors rc
+              ON m.room_id = rc.room_id AND rc.reader = ?
+            WHERE m.room_id IN ({placeholders})
+              AND m.id > COALESCE(rc.last_read_message_id, 0)
+            GROUP BY m.room_id""",
+        [reader, *room_ids],
+    ).fetchall()
+
+    result = {rid: 0 for rid in room_ids}
+    for row in rows:
+        result[row[0]] = row[1]
+    return result
+
+
+def delete_read_cursors(conn: sqlite3.Connection, room_id: str) -> None:
+    """Delete all read cursors for a room. Used by delete_room and clear_room."""
+    with conn:
+        conn.execute("DELETE FROM read_cursors WHERE room_id = ?", (room_id,))
 
 
 def search_rooms_and_messages(

@@ -123,3 +123,58 @@ def test_list_projects(db):
 
     result = svc.list_projects()
     assert set(result["projects"]) == {"proj-a", "proj-b"}
+
+
+def test_unread_read_round_trip(db):
+    """Full round-trip: post messages -> check unread -> mark read -> check unread again."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.post_message("proj", "dev", "alice", "msg1")
+    svc.post_message("proj", "dev", "alice", "msg2")
+    m3 = svc.post_message("proj", "dev", "alice", "msg3")
+
+    # Before reading: all 3 unread
+    counts = svc.get_unread_counts([room["id"]], "bob")
+    assert counts[room["id"]] == 3
+
+    # Mark read up to msg3
+    svc.mark_read(room["id"], "bob", m3["id"])
+
+    # After reading: 0 unread
+    counts = svc.get_unread_counts([room["id"]], "bob")
+    assert counts[room["id"]] == 0
+
+    # New message arrives
+    svc.post_message("proj", "dev", "alice", "msg4")
+
+    # 1 unread
+    counts = svc.get_unread_counts([room["id"]], "bob")
+    assert counts[room["id"]] == 1
+
+
+def test_unread_counts_multi_reader(db):
+    """Different readers have independent cursors."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    m1 = svc.post_message("proj", "dev", "alice", "msg1")
+    svc.post_message("proj", "dev", "alice", "msg2")
+
+    svc.mark_read(room["id"], "bob", m1["id"])
+
+    bob_counts = svc.get_unread_counts([room["id"]], "bob")
+    carol_counts = svc.get_unread_counts([room["id"]], "carol")
+    assert bob_counts[room["id"]] == 1    # read msg1, msg2 unread
+    assert carol_counts[room["id"]] == 2  # never read
+
+
+def test_delete_room_cascades_read_cursors(db):
+    """Deleting a room also deletes its read cursors (ON DELETE CASCADE)."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    msg = svc.post_message("proj", "dev", "alice", "hello")
+    svc.mark_read(room["id"], "bob", msg["id"])
+    svc.archive_room("proj", "dev")
+    svc.delete_room(room["id"])
+    # Cursor should be gone (no orphaned data)
+    from team_chat_mcp.db import get_read_cursor
+    assert get_read_cursor(db, room["id"], "bob") is None

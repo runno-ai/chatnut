@@ -16,6 +16,9 @@ from team_chat_mcp.db import (
     delete_messages,
     search_rooms_and_messages,
     get_all_room_stats as db_get_all_room_stats,
+    upsert_read_cursor,
+    get_read_cursor,
+    get_unread_counts as db_get_unread_counts,
 )
 
 
@@ -158,6 +161,23 @@ class ChatService:
         """
         rooms = db_auto_archive_stale_rooms(self.db, max_inactive_seconds=max_inactive_seconds)
         return [r.to_dict() for r in rooms]
+
+    def mark_read(self, room_id: str, reader: str, last_read_message_id: int) -> dict:
+        """Mark messages as read up to the given message ID for a reader."""
+        if not reader or not reader.strip():
+            raise ValueError("reader must be a non-empty string")
+        if last_read_message_id < 0:
+            raise ValueError("last_read_message_id must be >= 0")
+        room_obj = get_room_by_id(self.db, room_id)
+        if room_obj is None:
+            raise ValueError(f"Room '{room_id}' not found")
+        upsert_read_cursor(self.db, room_id, reader, last_read_message_id)
+        cursor = get_read_cursor(self.db, room_id, reader)
+        return {"room_id": room_id, "reader": reader, "last_read_message_id": cursor}
+
+    def get_unread_counts(self, room_ids: list[str], reader: str) -> dict[str, int]:
+        """Get unread message counts for multiple rooms for a given reader."""
+        return db_get_unread_counts(self.db, room_ids, reader)
 
     def search(self, query: str, project: str | None = None) -> dict:
         result = search_rooms_and_messages(self.db, query, project=project)

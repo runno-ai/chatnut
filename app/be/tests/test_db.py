@@ -15,6 +15,9 @@ from team_chat_mcp.db import (
     delete_messages,
     search_rooms_and_messages,
     get_all_room_stats,
+    upsert_read_cursor,
+    get_read_cursor,
+    get_unread_counts,
 )
 
 
@@ -324,3 +327,118 @@ def test_get_all_room_stats_mixed(db):
 def test_get_all_room_stats_empty_list(db):
     stats = get_all_room_stats(db, [])
     assert stats == {}
+
+
+# --- Read cursor tests ---
+
+
+def test_upsert_read_cursor_insert(db):
+    """First cursor write creates a new row."""
+    room = create_room(db, project="proj", name="dev")
+    msg = insert_message(db, room.id, "alice", "hello")
+    upsert_read_cursor(db, room.id, "bob", msg.id)
+    cursor = get_read_cursor(db, room.id, "bob")
+    assert cursor == msg.id
+
+
+def test_upsert_read_cursor_update(db):
+    """Subsequent writes update the existing row."""
+    room = create_room(db, project="proj", name="dev")
+    m1 = insert_message(db, room.id, "alice", "hello")
+    m2 = insert_message(db, room.id, "alice", "world")
+    upsert_read_cursor(db, room.id, "bob", m1.id)
+    upsert_read_cursor(db, room.id, "bob", m2.id)
+    cursor = get_read_cursor(db, room.id, "bob")
+    assert cursor == m2.id
+
+
+def test_upsert_read_cursor_no_backward(db):
+    """Cursor cannot move backward (only forward)."""
+    room = create_room(db, project="proj", name="dev")
+    m1 = insert_message(db, room.id, "alice", "hello")
+    m2 = insert_message(db, room.id, "alice", "world")
+    upsert_read_cursor(db, room.id, "bob", m2.id)
+    upsert_read_cursor(db, room.id, "bob", m1.id)  # try to go backward
+    cursor = get_read_cursor(db, room.id, "bob")
+    assert cursor == m2.id  # stays at m2
+
+
+def test_get_read_cursor_none(db):
+    """Returns None when no cursor exists."""
+    room = create_room(db, project="proj", name="dev")
+    cursor = get_read_cursor(db, room.id, "bob")
+    assert cursor is None
+
+
+def test_get_unread_counts(db):
+    """Batch unread counts for multiple rooms."""
+    room1 = create_room(db, project="proj", name="room1")
+    room2 = create_room(db, project="proj", name="room2")
+    m1_1 = insert_message(db, room1.id, "alice", "msg1")
+    insert_message(db, room1.id, "alice", "msg2")
+    insert_message(db, room1.id, "alice", "msg3")
+    insert_message(db, room2.id, "bob", "msg1")
+    insert_message(db, room2.id, "bob", "msg2")
+    # bob has read msg1 in room1
+    upsert_read_cursor(db, room1.id, "bob", m1_1.id)
+    counts = get_unread_counts(db, [room1.id, room2.id], "bob")
+    assert counts[room1.id] == 2  # msg2 + msg3 unread
+    assert counts[room2.id] == 2  # never read room2 → all unread
+
+
+def test_get_unread_counts_no_cursor(db):
+    """All messages are unread when no cursor exists."""
+    room = create_room(db, project="proj", name="dev")
+    insert_message(db, room.id, "alice", "msg1")
+    insert_message(db, room.id, "alice", "msg2")
+    counts = get_unread_counts(db, [room.id], "bob")
+    assert counts[room.id] == 2
+
+
+def test_get_unread_counts_all_read(db):
+    """Returns 0 when cursor is at latest message."""
+    room = create_room(db, project="proj", name="dev")
+    insert_message(db, room.id, "alice", "msg1")
+    m2 = insert_message(db, room.id, "alice", "msg2")
+    upsert_read_cursor(db, room.id, "bob", m2.id)
+    counts = get_unread_counts(db, [room.id], "bob")
+    assert counts[room.id] == 0
+
+
+def test_get_unread_counts_empty_rooms(db):
+    """Rooms with no messages return 0 unread."""
+    room = create_room(db, project="proj", name="empty")
+    counts = get_unread_counts(db, [room.id], "bob")
+    assert counts[room.id] == 0
+
+
+def test_get_unread_counts_empty_list(db):
+    """Empty room_ids list returns empty dict."""
+    counts = get_unread_counts(db, [], "bob")
+    assert counts == {}
+
+
+def test_delete_read_cursors(db):
+    """delete_read_cursors removes all cursors for a room."""
+    from team_chat_mcp.db import delete_read_cursors
+    room = create_room(db, project="proj", name="dev")
+    msg = insert_message(db, room.id, "alice", "hello")
+    upsert_read_cursor(db, room.id, "bob", msg.id)
+    upsert_read_cursor(db, room.id, "carol", msg.id)
+    delete_read_cursors(db, room.id)
+    assert get_read_cursor(db, room.id, "bob") is None
+    assert get_read_cursor(db, room.id, "carol") is None
+
+
+def test_cross_room_cursor_isolation(db):
+    """Cursor from room A does not affect room B (global autoincrement IDs)."""
+    room_a = create_room(db, project="proj", name="room-a")
+    room_b = create_room(db, project="proj", name="room-b")
+    m_a = insert_message(db, room_a.id, "alice", "msg-in-a")
+    insert_message(db, room_b.id, "bob", "msg-in-b")
+    # Bob reads room A up to m_a (which has a higher ID than room_b's message)
+    upsert_read_cursor(db, room_a.id, "bob", m_a.id)
+    # Room B should still show 1 unread for bob (independent cursors)
+    counts = get_unread_counts(db, [room_a.id, room_b.id], "bob")
+    assert counts[room_a.id] == 0
+    assert counts[room_b.id] == 1

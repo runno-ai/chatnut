@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from team_chat_mcp.service import ChatService
-from team_chat_mcp.routes import create_router
+from team_chat_mcp.routes import create_router, chatroom_event_generator
 
 
 @pytest.fixture
@@ -403,3 +403,64 @@ async def test_stream_messages_non_integer_last_event_id(db):
     assert len(events) == 1
     msg = json.loads(events[0]["data"])
     assert msg["sender"] == "alice"
+
+
+# --- Task 4: mark_read endpoint + SSE unread enrichment ---
+
+
+def test_mark_read_endpoint(client, svc):
+    room = svc.init_room("proj", "dev")
+    msg = svc.post_message("proj", "dev", "alice", "hello")
+    resp = client.post(
+        f"/api/chatrooms/{room['id']}/read",
+        json={"reader": "web-user", "last_read_message_id": msg["id"]},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["reader"] == "web-user"
+    assert data["last_read_message_id"] == msg["id"]
+
+
+def test_mark_read_nonexistent_room(client):
+    resp = client.post(
+        "/api/chatrooms/nonexistent/read",
+        json={"reader": "web-user", "last_read_message_id": 1},
+    )
+    assert resp.status_code == 404
+
+
+def test_mark_read_empty_reader_returns_422(client, svc):
+    room = svc.init_room("proj", "dev")
+    svc.post_message("proj", "dev", "alice", "hello")
+    resp = client.post(
+        f"/api/chatrooms/{room['id']}/read",
+        json={"reader": "   ", "last_read_message_id": 1},
+    )
+    assert resp.status_code == 422
+
+
+def test_mark_read_negative_cursor_returns_422(client, svc):
+    room = svc.init_room("proj", "dev")
+    svc.post_message("proj", "dev", "alice", "hello")
+    resp = client.post(
+        f"/api/chatrooms/{room['id']}/read",
+        json={"reader": "web-user", "last_read_message_id": -1},
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_chatroom_sse_includes_unread_count(db):
+    """SSE chatroom stream includes unreadCount when reader param is present."""
+    svc = ChatService(db)
+    svc.init_room("proj", "dev")
+    svc.post_message("proj", "dev", "alice", "msg1")
+    svc.post_message("proj", "dev", "alice", "msg2")
+
+    gen = chatroom_event_generator(svc, reader="web-user")
+    event = await gen.__anext__()
+    rooms = json.loads(event["data"])
+    active = rooms["active"]
+    assert len(active) == 1
+    assert active[0]["unreadCount"] == 2  # web-user hasn't read anything
+    await gen.aclose()
