@@ -148,8 +148,16 @@ export default function App() {
         roomName={
           [...active, ...archived].find((r) => r.id === selectedRoom)?.name ?? selectedRoom
         }
+        roomBranch={[...active, ...archived].find((r) => r.id === selectedRoom)?.branch}
+        roomProject={[...active, ...archived].find((r) => r.id === selectedRoom)?.project}
         isLive={isLive}
         reader={readerId}
+        onSelectProject={(p) => { setSelectedProject(p); ssSet(SS_PROJECT, p); setSelectedBranch(null); ssSet(SS_BRANCH, null); }}
+        onSelectBranch={(b) => {
+          const proj = [...active, ...archived].find((r) => r.id === selectedRoom)?.project ?? null;
+          setSelectedProject(proj); ssSet(SS_PROJECT, proj);
+          setSelectedBranch(b); ssSet(SS_BRANCH, b);
+        }}
       />
     </div>
   );
