@@ -49,8 +49,9 @@ app/
 docs/
   plans/               # Implementation plans (active)
   plans/archived/      # Executed plans
+README.md
 CLAUDE.md
-DESIGN.md
+SKILL.md
 ```
 
 ## Commands
