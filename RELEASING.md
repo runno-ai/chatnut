@@ -2,7 +2,7 @@
 
 ## Branching Model
 
-```
+```text
 dev/* (feature branches)
   └─► test (staging / pre-release)
          └─► main (production / stable)
@@ -42,6 +42,7 @@ Configure once in PyPI project settings:
 ### Stable release (merge `test` → `main`)
 
 1. **Bump version in `app/be/pyproject.toml`:**
+
    ```toml
    version = "0.3.0"
    ```
@@ -82,7 +83,8 @@ gh workflow run cd.yml --repo runno-ai/agent-chat-mcp --ref test
 ```
 
 Or use the `/deployment` Claude skill:
-```
+
+```text
 /deployment status
 /deployment logs
 /deployment trigger

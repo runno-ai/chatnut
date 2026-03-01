@@ -70,7 +70,6 @@ reviews:
       - test
 
   path_filters:
-    - '!CLAUDE.md'
     - '!.claude/**'
     - '!**/node_modules/**'
     - '!**/__pycache__/**'
