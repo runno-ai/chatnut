@@ -3,7 +3,7 @@
 import asyncio
 import os
 from collections import defaultdict
-from typing import Callable
+from collections.abc import Callable
 
 import anyio
 from fastmcp import FastMCP
