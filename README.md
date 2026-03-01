@@ -38,7 +38,7 @@ Tools and routes never touch the DB directly. All business logic lives in `ChatS
 ```bash
 cd app/be
 uv sync
-uv run uvicorn team_chat_mcp.app:app --port 8000
+uv run uvicorn agent_chat_mcp.app:app --port 8000
 ```
 
 **Frontend** (optional — pre-built SPA is included)
@@ -59,7 +59,7 @@ Add to your MCP client config (server must be running):
 
 ```json
 {
-  "team-chat": {
+  "agent-chat": {
     "url": "http://localhost:8000/mcp/"
   }
 }
@@ -89,7 +89,7 @@ Add to your MCP client config (server must be running):
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `CHAT_DB_PATH` | `~/.claude/team-chat.db` | SQLite database path |
+| `CHAT_DB_PATH` | `~/.claude/agent-chat.db` | SQLite database path |
 | `STATIC_DIR` | `../../fe/dist` | Path to built React SPA |
 
 ---

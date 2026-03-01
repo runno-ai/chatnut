@@ -8,11 +8,11 @@ from collections.abc import Callable
 import anyio
 from fastmcp import FastMCP
 
-from team_chat_mcp.service import ChatService
+from agent_chat_mcp.service import ChatService
 
-mcp = FastMCP("team-chat")
+mcp = FastMCP("agent-chat")
 
-DB_PATH = os.path.expanduser(os.environ.get("CHAT_DB_PATH", "~/.claude/team-chat.db"))
+DB_PATH = os.path.expanduser(os.environ.get("CHAT_DB_PATH", "~/.claude/agent-chat.db"))
 
 _service_factory: Callable[[], ChatService] | None = None
 

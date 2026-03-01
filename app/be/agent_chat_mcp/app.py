@@ -1,4 +1,4 @@
-# team_chat_mcp/app.py
+# agent_chat_mcp/app.py
 """FastAPI application — mounts MCP + REST/SSE routes + static file serving."""
 
 import asyncio
@@ -16,13 +16,13 @@ logger = logging.getLogger(__name__)
 AUTO_ARCHIVE_INTERVAL = 300  # check every 5 minutes
 AUTO_ARCHIVE_INACTIVE_SECONDS = 7200  # archive after 2 hours of inactivity
 
-from team_chat_mcp.db import init_db
-from team_chat_mcp.service import ChatService
-from team_chat_mcp import mcp as mcp_module
-from team_chat_mcp.mcp import mcp
-from team_chat_mcp.routes import create_router
+from agent_chat_mcp.db import init_db
+from agent_chat_mcp.service import ChatService
+from agent_chat_mcp import mcp as mcp_module
+from agent_chat_mcp.mcp import mcp
+from agent_chat_mcp.routes import create_router
 
-DB_PATH = os.path.expanduser(os.environ.get("CHAT_DB_PATH", "~/.claude/team-chat.db"))
+DB_PATH = os.path.expanduser(os.environ.get("CHAT_DB_PATH", "~/.claude/agent-chat.db"))
 STATIC_DIR = os.environ.get("STATIC_DIR", os.path.join(os.path.dirname(__file__), "../../fe/dist"))
 
 

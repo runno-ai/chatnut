@@ -2,7 +2,7 @@
 
 import sqlite3
 
-from team_chat_mcp.db import (
+from agent_chat_mcp.db import (
     create_room,
     get_room,
     get_room_by_id,

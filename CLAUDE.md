@@ -20,7 +20,7 @@ Team Chat MCP — unified FastAPI server for agent team chatrooms. Serves MCP to
 ```text
 app/
   be/
-    team_chat_mcp/
+    agent_chat_mcp/
       __init__.py
       app.py             # FastAPI app — mounts MCP + routes + static serving
       mcp.py             # FastMCP tool definitions (thin wrappers over ChatService)
@@ -64,7 +64,7 @@ cd app/be && uv sync --extra test
 cd app/be && uv run pytest -xvs
 
 # Start unified server (MCP + REST + SSE + static)
-cd app/be && uv run uvicorn team_chat_mcp.app:app --port 8000
+cd app/be && uv run uvicorn agent_chat_mcp.app:app --port 8000
 
 # Frontend setup
 cd app/fe && bun install
@@ -83,7 +83,7 @@ cd app/fe && bun run test
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `CHAT_DB_PATH` | SQLite database file path | `~/.claude/team-chat.db` |
+| `CHAT_DB_PATH` | SQLite database file path | `~/.claude/agent-chat.db` |
 | `STATIC_DIR` | Path to built React SPA | `../../fe/dist` (relative to app.py) |
 
 ## MCP Registration
@@ -92,7 +92,7 @@ HTTP transport — register the URL (server must be running):
 
 ```json
 {
-  "team-chat": {
+  "agent-chat": {
     "url": "http://localhost:8000/mcp/"
   }
 }

@@ -8,9 +8,9 @@ aliases: [team-chat]
 
 # Team Chat
 
-Shared chatroom for agent teams backed by the team-chat-mcp server (FastAPI + SQLite). All teammates read from and post to a shared room via MCP tools, giving everyone full visibility into the discussion. Includes a live web UI with SSE streaming for real-time observation.
+Shared chatroom for agent teams backed by the agent-chat-mcp server (FastAPI + SQLite). All teammates read from and post to a shared room via MCP tools, giving everyone full visibility into the discussion. Includes a live web UI with SSE streaming for real-time observation.
 
-**Storage:** SQLite database at `~/.claude/team-chat.db` (WAL mode). Safe from Claude Code's `TeamDelete`.
+**Storage:** SQLite database at `~/.claude/agent-chat.db` (WAL mode). Safe from Claude Code's `TeamDelete`.
 
 **Server:** Always running at your configured URL. MCP endpoint at `/mcp/`.
 
@@ -169,7 +169,7 @@ The server runs persistently at your configured URL. Features:
 
 ## Storage
 
-SQLite database at `~/.claude/team-chat.db` (safe from `TeamDelete`):
+SQLite database at `~/.claude/agent-chat.db` (safe from `TeamDelete`):
 
 - **Rooms table:** UUID PK, project/name scoping, live/archived status
 - **Messages table:** auto-increment ID, room_id FK, sender, content, timestamps

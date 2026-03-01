@@ -1,5 +1,5 @@
 [project]
-name = "team-chat-mcp"
+name = "agent-chat-mcp"
 version = "0.2.0"
 description = "MCP server for agent team chatrooms with SQLite backend"
 requires-python = ">=3.12"

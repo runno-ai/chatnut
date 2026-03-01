@@ -5,8 +5,8 @@ Usage:
     python -m scripts.import_archive [--archive-dir DIR] [--db-path PATH] [--dry-run]
 
 Defaults:
-    --archive-dir  ~/.claude/team-chat/archived
-    --db-path      ~/.claude/team-chat.db  (or CHAT_DB_PATH env var)
+    --archive-dir  ~/.claude/agent-chat/archived
+    --db-path      ~/.claude/agent-chat.db  (or CHAT_DB_PATH env var)
 """
 
 import argparse
@@ -18,10 +18,10 @@ import sys
 import uuid
 from pathlib import Path
 
-# Add parent to path so we can import team_chat_mcp
+# Add parent to path so we can import agent_chat_mcp
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from team_chat_mcp.db import init_db
+from agent_chat_mcp.db import init_db
 
 
 # Filename pattern: {room-name}-{YYYYMMDD}-{HHMMSS}.jsonl
@@ -146,12 +146,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Import archived JSONL chatrooms into SQLite")
     parser.add_argument(
         "--archive-dir",
-        default=os.path.expanduser("~/.claude/team-chat/archived"),
+        default=os.path.expanduser("~/.claude/agent-chat/archived"),
         help="Directory containing .jsonl archive files",
     )
     parser.add_argument(
         "--db-path",
-        default=os.path.expanduser(os.environ.get("CHAT_DB_PATH", "~/.claude/team-chat.db")),
+        default=os.path.expanduser(os.environ.get("CHAT_DB_PATH", "~/.claude/agent-chat.db")),
         help="SQLite database path",
     )
     parser.add_argument("--dry-run", action="store_true", help="Show what would be imported without writing")
