@@ -75,7 +75,7 @@ async def app_lifespan(app):
 
 
 app = FastAPI(
-    title="Team Chat",
+    title="Agent Chat",
     lifespan=combine_lifespans(app_lifespan, mcp_app.lifespan),
 )
 

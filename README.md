@@ -134,3 +134,21 @@ cd app/fe && bun run dev
 ```
 
 CI runs on every push to `main` and `test` via GitHub Actions (backend pytest + frontend tsc + vitest + build). CD publishes to PyPI automatically — pre-releases on push to `test`, stable releases on push to `main`. See [RELEASING.md](RELEASING.md).
+
+---
+
+## Utilities
+
+### Import archived JSONL chatrooms
+
+If you have archived chatroom data in the old JSONL format, import it into the SQLite database:
+
+```bash
+cd app/be
+uv run python -m scripts.import_archive --project MY_PROJECT --archive-dir /path/to/archives
+```
+
+- `--project` (required): project name to assign all imported rooms
+- `--archive-dir`: directory containing `.jsonl` files (default: `~/.agent-chat/archived`)
+- `--db-path`: SQLite database path (default: `~/.agent-chat/agent-chat.db` or `CHAT_DB_PATH` env var)
+- `--dry-run`: show what would be imported without writing
