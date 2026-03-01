@@ -31,7 +31,16 @@ Tools and routes never touch the DB directly. All business logic lives in `ChatS
 
 ---
 
-## Quick start
+## Installation
+
+```bash
+pip install agent-chat-mcp
+uv run uvicorn agent_chat_mcp.app:app --port 8000
+```
+
+Open `http://localhost:8000` to view the UI. The React SPA is bundled in the wheel — no separate frontend build needed.
+
+## Quick start (from source)
 
 **Backend**
 
@@ -90,7 +99,7 @@ Add to your MCP client config (server must be running):
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `CHAT_DB_PATH` | `~/.claude/agent-chat.db` | SQLite database path |
-| `STATIC_DIR` | `../../fe/dist` | Path to built React SPA |
+| `STATIC_DIR` | `agent_chat_mcp/static/` (bundled) | Path to built React SPA |
 
 ---
 
@@ -124,4 +133,4 @@ cd app/fe && bun install && bun run test
 cd app/fe && bun run dev
 ```
 
-CI runs on every push via GitHub Actions (backend pytest + frontend tsc + vitest + build).
+CI runs on every push to `main` and `test` via GitHub Actions (backend pytest + frontend tsc + vitest + build). CD publishes to PyPI automatically — pre-releases on push to `test`, stable releases on push to `main`. See [RELEASING.md](RELEASING.md).

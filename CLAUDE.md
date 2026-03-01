@@ -84,7 +84,7 @@ cd app/fe && bun run test
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | `CHAT_DB_PATH` | SQLite database file path | `~/.claude/agent-chat.db` |
-| `STATIC_DIR` | Path to built React SPA | `../../fe/dist` (relative to app.py) |
+| `STATIC_DIR` | Path to built React SPA | `agent_chat_mcp/static/` (bundled in wheel) |
 
 ## MCP Registration
 
@@ -190,12 +190,21 @@ CREATE TABLE IF NOT EXISTS read_cursors (
 
 ## CI
 
-GitHub Actions (`.github/workflows/ci.yml`) runs on push to `main` and on PRs:
+GitHub Actions (`.github/workflows/ci.yml`) runs on push to `main` and `test`, and on PRs targeting either:
 
 | Job | Steps |
 |-----|-------|
 | **Backend Tests** | `uv sync --extra test` + `pytest -x` |
 | **Frontend** | `bun install` + `tsc --noEmit` + `vitest run` + `vite build` |
+
+## CD
+
+`.github/workflows/cd.yml` triggers on push to `test` (pre-release) and `main` (stable):
+
+- **test branch push** → publishes `{version}rc{run_number}` pre-release to PyPI + GitHub pre-release
+- **main branch push** → publishes `{version}` stable to PyPI + tags `v{version}` + GitHub Release
+
+Uses PyPI OIDC Trusted Publishing (no stored secrets). Requires one-time Trusted Publisher setup — see [RELEASING.md](RELEASING.md).
 
 ## Design Decisions
 

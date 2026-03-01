@@ -1,0 +1,212 @@
+name: CD
+
+on:
+  # Only publish after CI passes — prevents publishing broken code in parallel runs.
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [test, main]
+  workflow_dispatch:
+
+# Serialize CD runs per branch — prevents race conditions on rapid pushes.
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build & Publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # For workflow_run: only publish when CI succeeded. workflow_dispatch always runs.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && contains(fromJson('["test","main"]'), github.ref_name)) ||
+      github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: write    # For creating tags and GitHub Releases
+      id-token: write    # For OIDC Trusted Publishing to PyPI
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # For workflow_run: check out the exact commit CI validated.
+          # For workflow_dispatch: check out current HEAD (github.sha).
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: app/be/uv.lock
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: app/be/.python-version
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('app/fe/bun.lockb') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      # ── Determine version ──────────────────────────────────────────────
+      - name: Read base version from pyproject.toml
+        id: base_version
+        run: |
+          VERSION=$(python3 -c "
+          import tomllib
+          with open('app/be/pyproject.toml', 'rb') as f:
+              data = tomllib.load(f)
+          print(data['project']['version'])
+          ")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Compute publish version
+        id: version
+        run: |
+          BASE="${{ steps.base_version.outputs.version }}"
+          # For workflow_run: branch from the CI run that triggered us.
+          # For workflow_dispatch: branch from the ref used to trigger dispatch.
+          BRANCH="${{ github.event.workflow_run.head_branch || github.ref_name }}"
+          if [[ "$BRANCH" != "test" && "$BRANCH" != "main" ]]; then
+            echo "ERROR: CD can only run on test or main branches, got: $BRANCH"
+            exit 1
+          fi
+          if [[ "$BRANCH" == "test" ]]; then
+            PUBLISH_VERSION="${BASE}rc${{ github.run_number }}"
+            IS_PRERELEASE=true
+          else
+            PUBLISH_VERSION="${BASE}"
+            IS_PRERELEASE=false
+          fi
+          echo "publish_version=$PUBLISH_VERSION" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "Publishing version: $PUBLISH_VERSION (prerelease=$IS_PRERELEASE)"
+
+      # ── Build frontend ─────────────────────────────────────────────────
+      - name: Install frontend deps
+        working-directory: app/fe
+        run: bun install --frozen-lockfile
+
+      - name: Build frontend
+        working-directory: app/fe
+        run: bun run build
+
+      # ── Bundle frontend into Python package ───────────────────────────
+      - name: Bundle frontend into package
+        run: |
+          mkdir -p app/be/agent_chat_mcp/static
+          cp app/fe/dist/index.html app/be/agent_chat_mcp/static/index.html
+          echo "Bundled frontend:"
+          ls -lh app/be/agent_chat_mcp/static/
+
+      # ── Set pre-release version in pyproject.toml (test branch only) ──
+      - name: Set pre-release version in pyproject.toml
+        if: steps.version.outputs.is_prerelease == 'true'
+        run: |
+          # Note: regex rewrite is safe here — pyproject.toml format is stable
+          # and under our control. tomli-w not used to avoid adding a dep.
+          python3 -c "
+          import pathlib, re
+          p = pathlib.Path('app/be/pyproject.toml')
+          content = p.read_text()
+          new_content = re.sub(
+              r'^version = \"[^\"]+\"',
+              'version = \"${{ steps.version.outputs.publish_version }}\"',
+              content,
+              flags=re.MULTILINE
+          )
+          p.write_text(new_content)
+          print('Set version to ${{ steps.version.outputs.publish_version }}')
+          "
+
+      # Verify the version rewrite took effect (catches regex misses)
+      - name: Verify pre-release version was set
+        if: steps.version.outputs.is_prerelease == 'true'
+        run: |
+          python3 -c "
+          import tomllib
+          with open('app/be/pyproject.toml', 'rb') as f:
+              data = tomllib.load(f)
+          actual = data['project']['version']
+          expected = '${{ steps.version.outputs.publish_version }}'
+          assert actual == expected, f'Version mismatch: {actual!r} != {expected!r}'
+          print('Verified version:', actual)
+          "
+
+      # ── Build Python wheel ─────────────────────────────────────────────
+      - name: Build wheel
+        working-directory: app/be
+        run: uv build
+
+      # ── Verify frontend is bundled in wheel ───────────────────────────
+      - name: Verify wheel contains frontend
+        working-directory: app/be
+        run: |
+          python3 -c "
+          import zipfile, glob
+          wheel = sorted(glob.glob('dist/*.whl'))[-1]
+          with zipfile.ZipFile(wheel) as z:
+              names = z.namelist()
+              static_files = [n for n in names if 'static' in n]
+              print('Static files in wheel:', static_files)
+              assert any('index.html' in n for n in static_files), \
+                  'FAIL: index.html missing from wheel!'
+              print('OK: frontend bundled in wheel')
+          "
+
+      # ── Publish to PyPI via OIDC Trusted Publishing ────────────────────
+      - name: Publish to PyPI
+        working-directory: app/be
+        run: |
+          VERSION="${{ steps.version.outputs.publish_version }}"
+          # Idempotent: skip publish if version already exists on PyPI.
+          # Handles CD reruns where publish succeeded but a later step failed.
+          EXISTS=$(python3 -c "
+          import urllib.request, sys
+          try:
+              urllib.request.urlopen('https://pypi.org/pypi/agent-chat-mcp/${VERSION}/json')
+              print('true')
+          except Exception:
+              print('false')
+          ")
+          if [[ "$EXISTS" == "true" ]]; then
+            echo "Version $VERSION already on PyPI — skipping publish"
+          else
+            uv publish --trusted-publishing always
+          fi
+
+      # ── Create tag + GitHub Release ────────────────────────────────────
+      - name: Create tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.publish_version }}"
+          TAG="v${VERSION}"
+          IS_PRERELEASE="${{ steps.version.outputs.is_prerelease }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Idempotent: skip tag creation if already exists (handles CD reruns)
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists — skipping tag creation"
+          else
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+          fi
+
+          # Create release only if it doesn't exist
+          if gh release view "$TAG" &>/dev/null; then
+            echo "Release $TAG already exists — skipping"
+          else
+            PRERELEASE_FLAG=""
+            [[ "$IS_PRERELEASE" == "true" ]] && PRERELEASE_FLAG="--prerelease"
+            gh release create "$TAG" \
+              --title "Release $TAG" \
+              --generate-notes \
+              --verify-tag \
+              $PRERELEASE_FLAG
+          fi
