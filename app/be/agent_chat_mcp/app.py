@@ -22,8 +22,16 @@ from agent_chat_mcp import mcp as mcp_module
 from agent_chat_mcp.mcp import mcp
 from agent_chat_mcp.routes import create_router
 
+from pathlib import Path
+
+
+def _default_static_dir() -> str:
+    """Return the package-internal static/ directory path."""
+    return str(Path(__file__).parent / "static")
+
+
 DB_PATH = os.path.expanduser(os.environ.get("CHAT_DB_PATH", "~/.claude/agent-chat.db"))
-STATIC_DIR = os.environ.get("STATIC_DIR", os.path.join(os.path.dirname(__file__), "../../fe/dist"))
+STATIC_DIR = os.environ.get("STATIC_DIR", _default_static_dir())
 
 
 @lru_cache(maxsize=1)
