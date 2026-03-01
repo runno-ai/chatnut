@@ -8,6 +8,11 @@ on:
     branches: [test, main]
   workflow_dispatch:
 
+# Serialize CD runs per branch — prevents race conditions on rapid pushes.
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   publish:
     name: Build & Publish
@@ -108,6 +113,20 @@ jobs:
           )
           p.write_text(new_content)
           print('Set version to ${{ steps.version.outputs.publish_version }}')
+          "
+
+      # Verify the version rewrite took effect (catches regex misses)
+      - name: Verify pre-release version was set
+        if: steps.version.outputs.is_prerelease == 'true'
+        run: |
+          python3 -c "
+          import tomllib
+          with open('app/be/pyproject.toml', 'rb') as f:
+              data = tomllib.load(f)
+          actual = data['project']['version']
+          expected = '${{ steps.version.outputs.publish_version }}'
+          assert actual == expected, f'Version mismatch: {actual!r} != {expected!r}'
+          print('Verified version:', actual)
           "
 
       # ── Build Python wheel ─────────────────────────────────────────────
