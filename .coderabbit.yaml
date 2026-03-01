@@ -13,7 +13,7 @@ reviews:
   high_level_summary: true
   high_level_summary_instructions: |
     Focus on: SQLite schema/query changes, FastAPI/FastMCP integration, SSE streaming,
-    service layer correctness, React hook patterns, state management.
+    service layer correctness, React hook patterns, state management, CD/CI workflow changes.
     Flag: breaking changes, missing tests, pattern violations, SQL injection,
     API contract mismatches between MCP tools and REST endpoints.
 
@@ -27,10 +27,10 @@ reviews:
     MUST go through the service layer — never touch the DB directly.
 
     ## CRITICAL: Documentation Convention
-    This project uses CLAUDE.md and DESIGN.md at the root for documentation.
+    This project uses CLAUDE.md at the root for documentation.
     Plans live in docs/plans/. Do NOT flag missing README files.
     - PREFER updating existing docs over suggesting new ones
-    - Check if CLAUDE.md or DESIGN.md need updates based on code changes
+    - Check if CLAUDE.md needs updates based on code changes
 
     ## CRITICAL: Test Coverage Assessment
     - New functions MUST have unit tests
@@ -67,6 +67,7 @@ reviews:
     drafts: false
     base_branches:
       - main
+      - test
 
   path_filters:
     - '!CLAUDE.md'
@@ -98,7 +99,7 @@ reviews:
            - Request changes if test coverage is insufficient
 
     # === Backend: Python/FastAPI ===
-    - path: 'app/be/team_chat_mcp/db.py'
+    - path: 'app/be/agent_chat_mcp/db.py'
       instructions: |
         SQLite schema, migrations, and query layer. Verify:
         - All queries use parameterized ? placeholders (no string interpolation)
@@ -108,7 +109,7 @@ reviews:
         - INSERT OR IGNORE for idempotent room creation
         - limit+1 pagination pattern for has_more detection
 
-    - path: 'app/be/team_chat_mcp/service.py'
+    - path: 'app/be/agent_chat_mcp/service.py'
       instructions: |
         ChatService business logic layer. Verify:
         - All public methods return dicts (not model objects)
@@ -116,23 +117,24 @@ reviews:
         - Archived room rejection for post_message
         - No direct SQL — delegates to db.py functions
 
-    - path: 'app/be/team_chat_mcp/mcp.py'
+    - path: 'app/be/agent_chat_mcp/mcp.py'
       instructions: |
         FastMCP tool definitions (thin wrappers over ChatService). Verify:
         - Tools use _service_factory() set by app.py (not own DB connection)
         - Tool docstrings are clear (shown to LLM agents)
         - No business logic in tools — delegate to ChatService
 
-    - path: 'app/be/team_chat_mcp/app.py'
+    - path: 'app/be/agent_chat_mcp/app.py'
       instructions: |
         FastAPI application entry point. Verify:
-        - mcp.http_app(path="") + app.mount("/mcp") to avoid double prefix
+        - mcp.http_app(path="/") + app.mount("/mcp") to avoid double prefix
         - combine_lifespans for FastMCP session manager
         - Single _get_service() shared with MCP via set_service_factory
-        - SPA catch-all has path traversal protection (normpath + startswith)
+        - SPA catch-all uses Path.is_relative_to() for path traversal protection
+        - _default_static_dir() returns Path(__file__).parent / "static"
         - Frontend-not-built returns 503 (not 200)
 
-    - path: 'app/be/team_chat_mcp/routes.py'
+    - path: 'app/be/agent_chat_mcp/routes.py'
       instructions: |
         REST + SSE endpoints for the web UI. Verify:
         - Routes use service layer (never direct DB access)
@@ -187,14 +189,29 @@ reviews:
         - SSE generators tested via direct async iteration
         Flag as CRITICAL if test coverage is insufficient.
 
-    # === Documentation ===
-    - path: 'DESIGN.md'
+    # === CI/CD Workflows ===
+    - path: '.github/workflows/**'
       instructions: |
-        Project design document. Verify:
+        GitHub Actions CI/CD workflows. Verify:
+        - CD workflow (cd.yml) uses workflow_run trigger (not push) to gate on CI success
+        - CD publish job has concurrency group to prevent race conditions on rapid pushes
+        - OIDC Trusted Publishing uses id-token: write + uv publish --trusted-publishing always
+        - PyPI publish is idempotent (pre-checks if version exists before uv publish)
+        - Tag + GitHub Release creation are idempotent (skip-if-exists guards)
+        - version_run conditional uses steps.version.outputs.is_prerelease (not github.ref)
+        - No unused workflow_dispatch inputs
+        - Timeouts set on long-running jobs
+        Flag as CRITICAL if publish can race with CI or is non-idempotent.
+
+    # === Documentation ===
+    - path: 'CLAUDE.md'
+      instructions: |
+        Primary project documentation. Verify:
         - Content reflects current implementation
+        - Tool signatures match actual mcp.py definitions
+        - REST endpoint table matches actual routes.py
         - Schema matches actual db.py CREATE TABLE statements
-        - Architecture diagram matches actual FastAPI mount structure
-        - MCP tool signatures match actual mcp.py definitions
+        - CD section reflects current workflow behavior
         Flag as CRITICAL if documentation contradicts implementation.
 
     - path: 'docs/plans/*.md'
@@ -218,15 +235,28 @@ reviews:
       enabled: true
     shellcheck:
       enabled: true
+    actionlint:
+      enabled: true
+    yamllint:
+      enabled: true
     gitleaks:
+      enabled: true
+    trufflehog:
       enabled: true
 
 knowledge_base:
   opt_out: false
+  web_search:
+    enabled: true
   learnings:
     scope: local
   code_guidelines:
     enabled: true
+  linear:
+    usage: auto
 
 chat:
   auto_reply: true
+  integrations:
+    linear:
+      usage: auto
