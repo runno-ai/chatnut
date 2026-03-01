@@ -18,10 +18,13 @@ _service_factory: Callable[[], ChatService] | None = None
 
 # Waiter registry: room_id → set of asyncio.Queue objects
 # All mutations happen exclusively on the event loop thread (via _wake_all callback).
-_waiters: defaultdict[str, set[asyncio.Queue]] = defaultdict(set)
+_waiters: defaultdict[str, set[asyncio.Queue[None]]] = defaultdict(set)
 
 # Running event loop — set from app_lifespan for thread-safe notification
 _loop: asyncio.AbstractEventLoop | None = None
+
+# Maximum concurrent waiters per room — prevents DoS via connection flooding
+MAX_WAITERS_PER_ROOM = 100
 
 
 def set_service_factory(factory: Callable[[], ChatService]) -> None:
@@ -48,9 +51,11 @@ def _notify_waiters(room_id: str) -> None:
     Thread-safe: schedules _wake_all onto the event loop via call_soon_threadsafe so
     _waiters is only ever touched on the event loop thread.
 
+    Safe to call on a closed or missing loop — both cases are no-ops.
+
     IMPORTANT: Do NOT call from a finally block — must only fire on successful inserts.
     """
-    if _loop is None:
+    if _loop is None or _loop.is_closed():
         return
 
     def _wake_all() -> None:
@@ -58,7 +63,10 @@ def _notify_waiters(room_id: str) -> None:
         for q in list(_waiters.get(room_id, ())):
             q.put_nowait(None)
 
-    _loop.call_soon_threadsafe(_wake_all)
+    try:
+        _loop.call_soon_threadsafe(_wake_all)
+    except RuntimeError:
+        pass  # loop closed between is_closed() check and call_soon_threadsafe
 
 
 @mcp.tool()
@@ -133,7 +141,10 @@ async def wait_for_messages(
 
     timeout = min(timeout, 60.0)
 
-    q: asyncio.Queue = asyncio.Queue()
+    q: asyncio.Queue[None] = asyncio.Queue()
+    # Enforce per-room waiter limit to prevent DoS via connection flooding
+    if len(_waiters[room_id]) >= MAX_WAITERS_PER_ROOM:
+        raise ValueError(f"Too many concurrent waiters for room '{room_id}' (max {MAX_WAITERS_PER_ROOM})")
     # Register BEFORE the DB check — see TOCTOU note in docstring
     _waiters[room_id].add(q)
     try:
@@ -154,6 +165,17 @@ async def wait_for_messages(
             woken = True
 
         if not woken:
+            # Final re-check: a message may have been posted concurrently with the timeout.
+            # This closes the race between anyio's deadline firing and a pending _notify_waiters call,
+            # and also handles the case where _loop was None so notifications were not delivered.
+            final = await anyio.to_thread.run_sync(
+                lambda: _get_service().read_messages_by_room_id(
+                    room_id, since_id=since_id, limit=limit, message_type=message_type
+                )
+            )
+            if final["messages"]:
+                final["timed_out"] = False
+                return final
             return {"messages": [], "has_more": False, "timed_out": True}
 
         result = await anyio.to_thread.run_sync(

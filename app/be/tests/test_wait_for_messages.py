@@ -6,7 +6,7 @@ import anyio
 import pytest
 
 from team_chat_mcp import mcp as mcp_module
-from team_chat_mcp.mcp import _notify_waiters, _waiters, wait_for_messages
+from team_chat_mcp.mcp import MAX_WAITERS_PER_ROOM, _notify_waiters, _waiters, wait_for_messages
 from team_chat_mcp.service import ChatService
 
 
@@ -212,6 +212,16 @@ async def test_notify_waiters_loop_set_no_waiters(room_id):
     assert not _waiters.get(room_id)
 
 
+@pytest.mark.anyio
+async def test_notify_waiters_closed_loop():
+    """_notify_waiters with a closed event loop does not raise RuntimeError."""
+    closed_loop = asyncio.new_event_loop()
+    closed_loop.close()
+    mcp_module.set_event_loop(closed_loop)
+    _notify_waiters("any-room")  # must not raise
+    mcp_module.set_event_loop(None)
+
+
 # ── since_id ahead of existing messages ──────────────────────────────────────
 
 @pytest.mark.anyio
@@ -243,3 +253,78 @@ async def test_wait_for_messages_since_id_ahead_blocks(room_id):
 
     assert result["timed_out"] is False
     assert any(m["content"] == "new message" for m in result["messages"])
+
+
+# ── Closed-loop / loop-not-set ────────────────────────────────────────────────
+
+@pytest.mark.anyio
+async def test_wait_for_messages_loop_not_set_final_recheck(room_id):
+    """When _loop is None, notifications are not delivered, but final re-check catches late messages."""
+    mcp_module.set_event_loop(None)  # Simulate calling before lifespan sets the loop
+    svc = mcp_module._get_service()
+
+    def _post_without_loop() -> None:
+        svc.post_message_by_room_id(room_id, "alice", "late message")
+        _notify_waiters(room_id)  # no-op: _loop is None
+
+    async def delayed_post():
+        await asyncio.sleep(0.02)
+        await anyio.to_thread.run_sync(_post_without_loop)
+
+    # timeout > delay so message is posted before timeout, but no notification delivered.
+    # The final re-check after timeout should pick it up.
+    waiter = asyncio.create_task(wait_for_messages(room_id=room_id, since_id=0, timeout=0.1))
+    poster = asyncio.create_task(delayed_post())
+    result = await waiter
+    await poster
+
+    # Final re-check catches the message despite no notification
+    assert result["timed_out"] is False
+    assert any(m["content"] == "late message" for m in result["messages"])
+
+
+# ── zero timeout ──────────────────────────────────────────────────────────────
+
+@pytest.mark.anyio
+async def test_wait_for_messages_zero_timeout_no_messages(room_id):
+    """timeout=0.0 returns timed_out=True immediately when no messages exist."""
+    loop = asyncio.get_running_loop()
+    mcp_module.set_event_loop(loop)
+
+    result = await wait_for_messages(room_id=room_id, since_id=0, timeout=0.0)
+    assert result["timed_out"] is True
+    assert result["messages"] == []
+
+
+@pytest.mark.anyio
+async def test_wait_for_messages_zero_timeout_with_existing_messages(room_id):
+    """timeout=0.0 still returns messages that exist (early-exit path)."""
+    loop = asyncio.get_running_loop()
+    mcp_module.set_event_loop(loop)
+    mcp_module._get_service().post_message_by_room_id(room_id, "alice", "already here")
+
+    result = await wait_for_messages(room_id=room_id, since_id=0, timeout=0.0)
+    assert result["timed_out"] is False
+    assert len(result["messages"]) == 1
+
+
+# ── DoS limit ─────────────────────────────────────────────────────────────────
+
+@pytest.mark.anyio
+async def test_wait_for_messages_max_waiters_limit(room_id):
+    """Raises ValueError when MAX_WAITERS_PER_ROOM concurrent waiters are registered."""
+    loop = asyncio.get_running_loop()
+    mcp_module.set_event_loop(loop)
+
+    # Manually populate _waiters up to the limit
+    import asyncio as _asyncio
+    fake_queues = [_asyncio.Queue() for _ in range(MAX_WAITERS_PER_ROOM)]
+    for fq in fake_queues:
+        _waiters[room_id].add(fq)
+
+    try:
+        with pytest.raises(ValueError, match="Too many concurrent waiters"):
+            await wait_for_messages(room_id=room_id, since_id=0, timeout=1)
+    finally:
+        # Restore clean state
+        _waiters.pop(room_id, None)

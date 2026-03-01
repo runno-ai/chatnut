@@ -64,6 +64,7 @@ async def app_lifespan(app):
         await task
     except asyncio.CancelledError:
         pass
+    mcp_module.set_event_loop(None)  # Clear stale reference; _notify_waiters guards against closed loop
 
 
 app = FastAPI(
