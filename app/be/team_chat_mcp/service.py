@@ -109,6 +109,10 @@ class ChatService:
             "has_more": has_more,
         }
 
+    def room_exists(self, room_id: str) -> bool:
+        """Return True if a room with the given ID exists."""
+        return get_room_by_id(self.db, room_id) is not None
+
     def get_all_room_stats(self, room_ids: list[str]) -> dict[str, dict]:
         """Get message stats for multiple rooms in batch (3 queries total).
 

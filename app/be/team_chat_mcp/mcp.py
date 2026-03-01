@@ -1,8 +1,11 @@
 """FastMCP tool definitions — thin wrappers over ChatService."""
 
+import asyncio
 import os
+from collections import defaultdict
 from typing import Callable
 
+import anyio
 from fastmcp import FastMCP
 
 from team_chat_mcp.service import ChatService
@@ -13,6 +16,13 @@ DB_PATH = os.path.expanduser(os.environ.get("CHAT_DB_PATH", "~/.claude/team-chat
 
 _service_factory: Callable[[], ChatService] | None = None
 
+# Waiter registry: room_id → set of asyncio.Queue objects
+# All mutations happen exclusively on the event loop thread (via _wake_all callback).
+_waiters: defaultdict[str, set[asyncio.Queue]] = defaultdict(set)
+
+# Running event loop — set from app_lifespan for thread-safe notification
+_loop: asyncio.AbstractEventLoop | None = None
+
 
 def set_service_factory(factory: Callable[[], ChatService]) -> None:
     """Set the service factory used by all MCP tool handlers."""
@@ -20,10 +30,35 @@ def set_service_factory(factory: Callable[[], ChatService]) -> None:
     _service_factory = factory
 
 
+def set_event_loop(loop: asyncio.AbstractEventLoop | None) -> None:
+    """Store the running event loop for cross-thread waiter notification."""
+    global _loop
+    _loop = loop
+
+
 def _get_service() -> ChatService:
     if _service_factory is None:
         raise RuntimeError("Service factory not set — call set_service_factory() before using MCP tools")
     return _service_factory()
+
+
+def _notify_waiters(room_id: str) -> None:
+    """Wake up all wait_for_messages callers blocked on room_id.
+
+    Thread-safe: schedules _wake_all onto the event loop via call_soon_threadsafe so
+    _waiters is only ever touched on the event loop thread.
+
+    IMPORTANT: Do NOT call from a finally block — must only fire on successful inserts.
+    """
+    if _loop is None:
+        return
+
+    def _wake_all() -> None:
+        # Runs on the event loop thread — safe to read/iterate _waiters here
+        for q in list(_waiters.get(room_id, ())):
+            q.put_nowait(None)
+
+    _loop.call_soon_threadsafe(_wake_all)
 
 
 @mcp.tool()
@@ -51,7 +86,9 @@ def post_message(
     message_type: str = "message",
 ) -> dict:
     """Post a message to a room by room_id (from init_room). Rejects posts to archived rooms."""
-    return _get_service().post_message_by_room_id(room_id, sender, content, message_type=message_type)
+    result = _get_service().post_message_by_room_id(room_id, sender, content, message_type=message_type)
+    _notify_waiters(room_id)  # only reached on successful insert
+    return result
 
 
 @mcp.tool()
@@ -61,8 +98,76 @@ def read_messages(
     limit: int = 100,
     message_type: str | None = None,
 ) -> dict:
-    """Read messages from a room by room_id (from init_room). Use since_id for incremental polling. Default limit 100."""
+    """Read messages from a room by room_id. Use since_id for incremental reads. Default limit 100."""
     return _get_service().read_messages_by_room_id(room_id, since_id=since_id, limit=limit, message_type=message_type)
+
+
+@mcp.tool()
+async def wait_for_messages(
+    room_id: str,
+    since_id: int,
+    timeout: float = 30.0,
+    limit: int = 100,
+    message_type: str | None = None,
+) -> dict:
+    """Block until new messages arrive in room_id after since_id, or timeout seconds.
+
+    Raises ValueError for unknown room_id or negative since_id (fail fast — don't silently
+    hang 30s on a typo). Timeout is capped at 60s to prevent holding connections indefinitely.
+
+    The queue is registered BEFORE the early-exit DB check — TOCTOU-safe: any message posted
+    after registration fires _notify_waiters which puts an item in the queue, so it's picked
+    up either by the early-exit check or by await q.get(), with no gap.
+
+    Returns:
+        messages: list of new messages (may be empty if woken then no new msg at since_id)
+        has_more: whether more messages exist beyond limit
+        timed_out: True if no message arrived within timeout; False otherwise
+    """
+    if since_id < 0:
+        raise ValueError(f"since_id must be >= 0, got {since_id}")
+
+    exists = await anyio.to_thread.run_sync(lambda: _get_service().room_exists(room_id))
+    if not exists:
+        raise ValueError(f"Room '{room_id}' not found")
+
+    timeout = min(timeout, 60.0)
+
+    q: asyncio.Queue = asyncio.Queue()
+    # Register BEFORE the DB check — see TOCTOU note in docstring
+    _waiters[room_id].add(q)
+    try:
+        # Early exit: return immediately if messages already exist after since_id
+        existing = await anyio.to_thread.run_sync(
+            lambda: _get_service().read_messages_by_room_id(
+                room_id, since_id=since_id, limit=limit, message_type=message_type
+            )
+        )
+        if existing["messages"]:
+            existing["timed_out"] = False
+            return existing
+
+        # Block until _notify_waiters fires _wake_all or timeout elapses
+        woken = False
+        with anyio.move_on_after(timeout):
+            await q.get()
+            woken = True
+
+        if not woken:
+            return {"messages": [], "has_more": False, "timed_out": True}
+
+        result = await anyio.to_thread.run_sync(
+            lambda: _get_service().read_messages_by_room_id(
+                room_id, since_id=since_id, limit=limit, message_type=message_type
+            )
+        )
+        result["timed_out"] = False
+        return result
+    finally:
+        _waiters[room_id].discard(q)
+        # Clean up empty sets to avoid unbounded memory growth in long-running server
+        if not _waiters[room_id]:
+            _waiters.pop(room_id, None)
 
 
 @mcp.tool()

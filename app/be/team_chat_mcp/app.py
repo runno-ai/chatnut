@@ -56,6 +56,7 @@ async def _auto_archive_loop() -> None:
 async def app_lifespan(app):
     # Ensure service is initialized at startup
     _get_service()
+    mcp_module.set_event_loop(asyncio.get_running_loop())
     task = asyncio.create_task(_auto_archive_loop())
     yield
     task.cancel()
