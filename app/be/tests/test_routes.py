@@ -146,7 +146,7 @@ def test_search(client, db):
     assert len(resp.json()["message_rooms"]) == 1
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_stream_messages_initial_history(db):
     """Test SSE message generator sends full history when last_id=0.
 
@@ -188,7 +188,7 @@ async def test_stream_messages_initial_history(db):
     assert "id" in events[1]
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_stream_messages_last_event_id(db):
     """Test SSE message generator honors last_id for reconnection.
 
@@ -229,7 +229,7 @@ async def test_stream_messages_last_event_id(db):
 # --- Test 3: chatroom_event_generator ---
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_chatroom_event_generator_initial_emission(db):
     """Test SSE chatroom generator emits room data with stats on first iteration."""
     from team_chat_mcp.routes import chatroom_event_generator
@@ -268,7 +268,7 @@ async def test_chatroom_event_generator_initial_emission(db):
     assert room["roleCounts"]["bob"] == 1
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_chatroom_event_generator_no_reemit_unchanged(db):
     """Test SSE chatroom generator does not re-emit when data is unchanged (hash dedup)."""
     from team_chat_mcp.routes import chatroom_event_generator
@@ -360,7 +360,7 @@ def test_chatrooms_invalid_status_returns_422(client):
     assert resp.status_code == 422
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_stream_messages_non_integer_last_event_id(db):
     """Non-integer Last-Event-Id should fall back to 0, sending full history.
 
@@ -449,7 +449,7 @@ def test_mark_read_negative_cursor_returns_422(client, svc):
     assert resp.status_code == 422
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_chatroom_sse_includes_unread_count(db):
     """SSE chatroom stream includes unreadCount when reader param is present."""
     svc = ChatService(db)

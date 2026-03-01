@@ -192,6 +192,16 @@ async def test_wait_for_messages_negative_since_id(room_id):
         await wait_for_messages(room_id=room_id, since_id=-1, timeout=5)
 
 
+@pytest.mark.anyio
+async def test_wait_for_messages_negative_timeout(room_id):
+    """Raises ValueError for timeout < 0."""
+    loop = asyncio.get_running_loop()
+    mcp_module.set_event_loop(loop)
+
+    with pytest.raises(ValueError, match="timeout"):
+        await wait_for_messages(room_id=room_id, since_id=0, timeout=-1.0)
+
+
 # ── _notify_waiters edge cases ────────────────────────────────────────────────
 
 @pytest.mark.anyio

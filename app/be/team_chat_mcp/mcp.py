@@ -134,6 +134,8 @@ async def wait_for_messages(
     """
     if since_id < 0:
         raise ValueError(f"since_id must be >= 0, got {since_id}")
+    if timeout < 0:
+        raise ValueError(f"timeout must be >= 0, got {timeout}")
 
     exists = await anyio.to_thread.run_sync(lambda: _get_service().room_exists(room_id))
     if not exists:
