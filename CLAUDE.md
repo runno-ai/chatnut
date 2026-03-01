@@ -120,6 +120,7 @@ Tools and routes never touch the DB directly. Tests instantiate `ChatService` wi
 | `init_room` | `(project, name, branch?, description?)` | Create a chatroom (idempotent) |
 | `post_message` | `(room_id, sender, content, message_type?)` | Post a message by room_id |
 | `read_messages` | `(room_id, since_id?, limit?, message_type?)` | Read messages by room_id |
+| `wait_for_messages` | `(room_id, since_id, timeout?, limit?, message_type?)` | Block until new messages arrive (long-poll, max 60s); returns `timed_out=True` on timeout |
 | `list_rooms` | `(project?, status?)` | List rooms (filter by project, status) |
 | `list_projects` | `()` | List distinct project names |
 | `archive_room` | `(project, name)` | Archive a room (keeps messages) |
@@ -127,6 +128,15 @@ Tools and routes never touch the DB directly. Tests instantiate `ChatService` wi
 | `clear_room` | `(project, name)` | Delete all messages in a room |
 | `mark_read` | `(room_id, reader, last_read_message_id)` | Mark messages as read (cursor only moves forward) |
 | `search` | `(query, project?)` | Search room names + message content |
+
+## SKILL.md Dual-Update Rule
+
+When adding or modifying MCP tools:
+
+1. Update `SKILL.md` in this repo (the in-repo copy)
+2. Update `~/.claude-chan/skills/team-chat/SKILL.md` (the global skill copy)
+
+Both files must stay in sync. The in-repo `SKILL.md` is the source of truth; copy relevant sections to the global skill after each change.
 
 ## REST Endpoints
 
@@ -199,3 +209,4 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on push to `main` and on PRs:
 - **No ORM** — direct sqlite3, schema is 2 tables
 - **`since_id` for incremental reads** — agents poll with last-seen message ID
 - **Read cursors for unread tracking** — `(room_id, reader)` PK, forward-only via `MAX()` in UPSERT, `ON DELETE CASCADE` for cleanup
+- **`wait_for_messages` for agent blocking** — asyncio.Queue per waiter; `post_message` notifies via `call_soon_threadsafe(_wake_all)` (all `_waiters` access event-loop-only); zero DB reads while waiting; agents call once instead of polling in a loop; timeout capped at 60s

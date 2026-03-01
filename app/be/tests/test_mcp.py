@@ -5,12 +5,16 @@ import pytest
 from team_chat_mcp.mcp import mcp
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_all_tools_registered():
     """Verify all expected MCP tools are registered."""
     tools = await mcp.list_tools()
     tool_names = {t.name for t in tools}
-    expected = {"ping", "init_room", "post_message", "read_messages", "list_rooms", "archive_room", "delete_room", "clear_room", "search", "list_projects"}
+    expected = {
+        "ping", "init_room", "post_message", "read_messages",
+        "list_rooms", "archive_room", "delete_room", "clear_room",
+        "search", "list_projects", "mark_read", "wait_for_messages",
+    }
     assert expected.issubset(tool_names), f"Missing tools: {expected - tool_names}"
 
 
