@@ -6,6 +6,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from functools import lru_cache
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
@@ -21,8 +22,6 @@ from agent_chat_mcp.service import ChatService
 from agent_chat_mcp import mcp as mcp_module
 from agent_chat_mcp.mcp import mcp
 from agent_chat_mcp.routes import create_router
-
-from pathlib import Path
 
 
 def _default_static_dir() -> str:
@@ -91,13 +90,13 @@ app.include_router(api_router)
 # Serve React SPA — static files + fallback to index.html
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
-    static_dir = os.path.abspath(STATIC_DIR)
-    file_path = os.path.normpath(os.path.join(static_dir, full_path))
-    if not file_path.startswith(static_dir):
+    static_dir = Path(STATIC_DIR).resolve()
+    file_path = (static_dir / full_path).resolve()
+    if not file_path.is_relative_to(static_dir):
         return JSONResponse(status_code=404, content={"error": "Not found"})
-    if os.path.isfile(file_path):
+    if file_path.is_file():
         return FileResponse(file_path)
-    index_path = os.path.join(static_dir, "index.html")
-    if os.path.isfile(index_path):
+    index_path = static_dir / "index.html"
+    if index_path.is_file():
         return FileResponse(index_path)
     return JSONResponse(status_code=503, content={"error": "Frontend not built. Run: cd app/fe && bun run build"})

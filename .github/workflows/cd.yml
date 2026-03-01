@@ -1,24 +1,30 @@
 name: CD
 
 on:
-  push:
+  # Only publish after CI passes — prevents publishing broken code in parallel runs.
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [test, main]
   workflow_dispatch:
-    inputs:
-      branch:
-        description: "Branch to publish from (test or main)"
-        required: true
-        default: test
 
 jobs:
   publish:
     name: Build & Publish
     runs-on: ubuntu-latest
+    # For workflow_run: only publish when CI succeeded. workflow_dispatch always runs.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     permissions:
       contents: write    # For creating tags and GitHub Releases
       id-token: write    # For OIDC Trusted Publishing to PyPI
     steps:
       - uses: actions/checkout@v4
+        with:
+          # For workflow_run: check out the exact commit CI validated.
+          # For workflow_dispatch: check out current HEAD (github.sha).
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - uses: astral-sh/setup-uv@v5
         with:
@@ -53,7 +59,10 @@ jobs:
         id: version
         run: |
           BASE="${{ steps.base_version.outputs.version }}"
-          if [[ "${{ github.ref }}" == "refs/heads/test" ]]; then
+          # For workflow_run: branch from the CI run that triggered us.
+          # For workflow_dispatch: branch from the ref used to trigger dispatch.
+          BRANCH="${{ github.event.workflow_run.head_branch || github.ref_name }}"
+          if [[ "$BRANCH" == "test" ]]; then
             PUBLISH_VERSION="${BASE}rc${{ github.run_number }}"
             IS_PRERELEASE=true
           else
@@ -83,7 +92,7 @@ jobs:
 
       # ── Set pre-release version in pyproject.toml (test branch only) ──
       - name: Set pre-release version in pyproject.toml
-        if: github.ref == 'refs/heads/test'
+        if: steps.version.outputs.is_prerelease == 'true'
         run: |
           # Note: regex rewrite is safe here — pyproject.toml format is stable
           # and under our control. tomli-w not used to avoid adding a dep.
@@ -125,7 +134,23 @@ jobs:
       # ── Publish to PyPI via OIDC Trusted Publishing ────────────────────
       - name: Publish to PyPI
         working-directory: app/be
-        run: uv publish --trusted-publishing always
+        run: |
+          VERSION="${{ steps.version.outputs.publish_version }}"
+          # Idempotent: skip publish if version already exists on PyPI.
+          # Handles CD reruns where publish succeeded but a later step failed.
+          EXISTS=$(python3 -c "
+          import urllib.request, sys
+          try:
+              urllib.request.urlopen('https://pypi.org/pypi/agent-chat-mcp/${VERSION}/json')
+              print('true')
+          except Exception:
+              print('false')
+          ")
+          if [[ "$EXISTS" == "true" ]]; then
+            echo "Version $VERSION already on PyPI — skipping publish"
+          else
+            uv publish --trusted-publishing always
+          fi
 
       # ── Create tag + GitHub Release ────────────────────────────────────
       - name: Create tag and GitHub Release
