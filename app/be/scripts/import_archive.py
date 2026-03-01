@@ -144,6 +144,10 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="Show what would be imported without writing")
     args = parser.parse_args()
 
+    project = args.project.strip()
+    if not project:
+        parser.error("--project must be a non-empty string")
+
     archive_dir = Path(args.archive_dir)
     if not archive_dir.is_dir():
         print(f"ERROR: archive directory not found: {archive_dir}")
@@ -154,7 +158,7 @@ def main() -> None:
         print("No .jsonl files found.")
         return
 
-    print(f"{'DRY RUN — ' if args.dry_run else ''}Importing {len(jsonl_files)} files from {archive_dir} into project '{args.project}'")
+    print(f"{'DRY RUN — ' if args.dry_run else ''}Importing {len(jsonl_files)} files from {archive_dir} into project '{project}'")
     print(f"Database: {args.db_path}")
     print()
 
@@ -165,7 +169,7 @@ def main() -> None:
     files_imported = 0
 
     for filepath in jsonl_files:
-        imported, skipped = import_file(conn, filepath, project=args.project, dry_run=args.dry_run)
+        imported, skipped = import_file(conn, filepath, project=project, dry_run=args.dry_run)
         total_imported += imported
         total_skipped += skipped
         if imported > 0:

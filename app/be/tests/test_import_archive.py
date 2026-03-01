@@ -210,7 +210,7 @@ class TestImportFileNormal:
         ]
         filepath = _write_jsonl(tmp_path / "chat-20240115-103000.jsonl", records)
 
-        imported, skipped = import_file(db, filepath, "proj")
+        imported, _ = import_file(db, filepath, "proj")
         assert imported == 1
 
 
@@ -361,7 +361,7 @@ class TestImportFileMultilineJSON:
         filepath = tmp_path / "chat-20240115-103000.jsonl"
         filepath.write_text(content)
 
-        imported, skipped = import_file(db, filepath, "proj")
+        imported, _ = import_file(db, filepath, "proj")
         assert imported == 2
 
         messages = db.execute(
@@ -382,7 +382,7 @@ class TestImportFileMultilineJSON:
         filepath = tmp_path / "chat-20240115-103000.jsonl"
         filepath.write_text(content)
 
-        imported, skipped = import_file(db, filepath, "proj")
+        imported, _ = import_file(db, filepath, "proj")
         assert imported == 1
 
     def test_unparseable_record_skipped(self, db, tmp_path):
@@ -395,7 +395,7 @@ class TestImportFileMultilineJSON:
         filepath = tmp_path / "chat-20240115-103000.jsonl"
         filepath.write_text(content)
 
-        imported, skipped = import_file(db, filepath, "proj")
+        imported, _ = import_file(db, filepath, "proj")
         # The broken record doesn't start with {"ts" so it won't be split as
         # a separate record by the regex. It gets appended to the previous record
         # or treated as its own chunk depending on the splitting. Let's just check
