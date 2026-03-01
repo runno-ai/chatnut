@@ -2,11 +2,14 @@
 """Import archived JSONL chatroom files into the SQLite database.
 
 Usage:
-    python -m scripts.import_archive [--archive-dir DIR] [--db-path PATH] [--dry-run]
+    python -m scripts.import_archive --project PROJECT [--archive-dir DIR] [--db-path PATH] [--dry-run]
 
-Defaults:
-    --archive-dir  ~/.claude/agent-chat/archived
-    --db-path      ~/.claude/agent-chat.db  (or CHAT_DB_PATH env var)
+Arguments:
+    --project      Project name to assign all imported rooms to (required)
+    --archive-dir  Directory containing .jsonl archive files
+                   (default: ~/.agent-chat/archived)
+    --db-path      SQLite database path
+                   (default: ~/.agent-chat/agent-chat.db or CHAT_DB_PATH env var)
 """
 
 import argparse
@@ -28,26 +31,6 @@ from agent_chat_mcp.db import init_db
 FILENAME_RE = re.compile(r"^(.+)-(\d{8})-(\d{6})\.jsonl$")
 
 
-def detect_project(room_name: str) -> str | None:
-    """Map room name prefix to project. Returns None to skip."""
-    lower = room_name.lower()
-
-    # Skip test rooms
-    if lower.startswith("test-"):
-        return None
-
-    # runno-agent-sdk: ra prefix with or without dash (ra5-, ra-11-, cr-ra27)
-    if re.match(r"^(cr-)?ra[-]?\d", lower) or lower.startswith("code-review-ra"):
-        return "runno-agent-sdk"
-
-    # team-chat-mcp
-    if "team-chat" in lower or "deferred-perf" in lower:
-        return "team-chat-mcp"
-
-    # Everything else is runno (cc-*, code-review-*, cr-*, planning rooms, etc.)
-    return "runno"
-
-
 def parse_filename(filename: str) -> tuple[str, str] | None:
     """Extract (room_name, created_at_iso) from filename. Returns None if no match."""
     m = FILENAME_RE.match(filename)
@@ -63,7 +46,7 @@ def parse_filename(filename: str) -> tuple[str, str] | None:
     return room_name, created_at
 
 
-def import_file(conn: sqlite3.Connection, filepath: Path, dry_run: bool = False) -> tuple[int, int]:
+def import_file(conn: sqlite3.Connection, filepath: Path, project: str, dry_run: bool = False) -> tuple[int, int]:
     """Import a single JSONL file. Returns (messages_imported, messages_skipped)."""
     result = parse_filename(filepath.name)
     if result is None:
@@ -71,10 +54,6 @@ def import_file(conn: sqlite3.Connection, filepath: Path, dry_run: bool = False)
         return 0, 0
 
     room_name, created_at = result
-    project = detect_project(room_name)
-    if project is None:
-        print(f"  SKIP (test room): {filepath.name}")
-        return 0, 0
 
     # Read all records — the old Bun server wrote multi-line JSON (raw newlines
     # inside string values), so we split on record boundaries instead of per-line.
@@ -145,13 +124,18 @@ def import_file(conn: sqlite3.Connection, filepath: Path, dry_run: bool = False)
 def main() -> None:
     parser = argparse.ArgumentParser(description="Import archived JSONL chatrooms into SQLite")
     parser.add_argument(
+        "--project",
+        required=True,
+        help="Project name to assign all imported rooms to",
+    )
+    parser.add_argument(
         "--archive-dir",
-        default=os.path.expanduser("~/.claude/agent-chat/archived"),
+        default=os.path.expanduser("~/.agent-chat/archived"),
         help="Directory containing .jsonl archive files",
     )
     parser.add_argument(
         "--db-path",
-        default=os.path.expanduser(os.environ.get("CHAT_DB_PATH", "~/.claude/agent-chat.db")),
+        default=os.path.expanduser(os.environ.get("CHAT_DB_PATH", "~/.agent-chat/agent-chat.db")),
         help="SQLite database path",
     )
     parser.add_argument("--dry-run", action="store_true", help="Show what would be imported without writing")
@@ -167,7 +151,7 @@ def main() -> None:
         print("No .jsonl files found.")
         return
 
-    print(f"{'DRY RUN — ' if args.dry_run else ''}Importing {len(jsonl_files)} files from {archive_dir}")
+    print(f"{'DRY RUN — ' if args.dry_run else ''}Importing {len(jsonl_files)} files from {archive_dir} into project '{args.project}'")
     print(f"Database: {args.db_path}")
     print()
 
@@ -178,7 +162,7 @@ def main() -> None:
     files_imported = 0
 
     for filepath in jsonl_files:
-        imported, skipped = import_file(conn, filepath, dry_run=args.dry_run)
+        imported, skipped = import_file(conn, filepath, project=args.project, dry_run=args.dry_run)
         total_imported += imported
         total_skipped += skipped
         if imported > 0:

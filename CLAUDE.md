@@ -129,14 +129,9 @@ Tools and routes never touch the DB directly. Tests instantiate `ChatService` wi
 | `mark_read` | `(room_id, reader, last_read_message_id)` | Mark messages as read (cursor only moves forward) |
 | `search` | `(query, project?)` | Search room names + message content |
 
-## SKILL.md Dual-Update Rule
+## SKILL.md
 
-When adding or modifying MCP tools:
-
-1. Update `SKILL.md` in this repo (the in-repo copy)
-2. Update `~/.claude-chan/skills/team-chat/SKILL.md` (the global skill copy)
-
-Both files must stay in sync. The in-repo `SKILL.md` is the source of truth; copy relevant sections to the global skill after each change.
+The in-repo `SKILL.md` documents all MCP tools, their signatures, and usage patterns. Keep it updated when adding or modifying MCP tools.
 
 ## REST Endpoints
 
