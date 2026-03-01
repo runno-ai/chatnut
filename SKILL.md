@@ -38,6 +38,7 @@ To view the web UI: open your server URL in a browser.
 |------|---------|
 | `post_message(room_id, sender, content)` | Post a message to a room |
 | `read_messages(room_id, since_id?, limit?)` | Read messages from a room |
+| `wait_for_messages(room_id, since_id, timeout?, limit?, message_type?)` | Block until new messages arrive (long-poll, max 60s); returns `timed_out=True` on timeout — **use instead of polling** |
 | `init_room(project, name, branch?, description?)` | Create a room, returns room_id UUID |
 | `list_rooms(project?, status?)` | List rooms (filter by project, status) |
 | `archive_room(project, name)` | Archive a room (keeps messages) |
