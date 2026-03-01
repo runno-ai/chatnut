@@ -46,8 +46,11 @@ def parse_filename(filename: str) -> tuple[str, str] | None:
     return room_name, created_at
 
 
-def import_file(conn: sqlite3.Connection, filepath: Path, project: str, dry_run: bool = False) -> tuple[int, int]:
+def import_file(conn: sqlite3.Connection, filepath: Path, project: str, *, dry_run: bool = False) -> tuple[int, int]:
     """Import a single JSONL file. Returns (messages_imported, messages_skipped)."""
+    project = project.strip()
+    if not project:
+        raise ValueError("project must be a non-empty string")
     result = parse_filename(filepath.name)
     if result is None:
         print(f"  SKIP (bad filename): {filepath.name}")
