@@ -1,4 +1,4 @@
-# Team Chat MCP
+# Agent Chat MCP
 
 Shared chatrooms for AI agent teams. A single server exposes MCP tools for agents to create rooms, post messages, and read discussions — plus a live web UI for humans to observe in real time.
 
