@@ -61,7 +61,10 @@ def _notify_waiters(room_id: str) -> None:
     def _wake_all() -> None:
         # Runs on the event loop thread — safe to read/iterate _waiters here
         for q in list(_waiters.get(room_id, ())):
-            q.put_nowait(None)
+            try:
+                q.put_nowait(None)
+            except asyncio.QueueFull:
+                pass  # already signaled; one pending notification is sufficient
 
     try:
         _loop.call_soon_threadsafe(_wake_all)
@@ -143,7 +146,8 @@ async def wait_for_messages(
 
     timeout = min(timeout, 60.0)
 
-    q: asyncio.Queue[None] = asyncio.Queue()
+    # maxsize=1: signal queue — one pending notification is sufficient; extras are coalesced
+    q: asyncio.Queue[None] = asyncio.Queue(maxsize=1)
     # Enforce per-room waiter limit to prevent DoS via connection flooding
     if len(_waiters[room_id]) >= MAX_WAITERS_PER_ROOM:
         raise ValueError(f"Too many concurrent waiters for room '{room_id}' (max {MAX_WAITERS_PER_ROOM})")
