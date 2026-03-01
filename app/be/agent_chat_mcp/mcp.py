@@ -12,7 +12,7 @@ from agent_chat_mcp.service import ChatService
 
 mcp = FastMCP("agent-chat")
 
-DB_PATH = os.path.expanduser(os.environ.get("CHAT_DB_PATH", "~/.claude/agent-chat.db"))
+DB_PATH = os.path.expanduser(os.environ.get("CHAT_DB_PATH", "~/.agent-chat/agent-chat.db"))
 
 _service_factory: Callable[[], ChatService] | None = None
 

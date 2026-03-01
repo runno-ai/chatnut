@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Team Chat MCP — unified FastAPI server for agent team chatrooms. Serves MCP tools (HTTP transport), REST/SSE web API, and a React SPA from a single process. SQLite-backed with project/branch scoping, search, and real-time updates via SSE.
+Agent Chat MCP — unified FastAPI server for agent team chatrooms. Serves MCP tools (HTTP transport), REST/SSE web API, and a React SPA from a single process. SQLite-backed with project/branch scoping, search, and real-time updates via SSE.
 
 ## Tech Stack
 
@@ -83,7 +83,7 @@ cd app/fe && bun run test
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `CHAT_DB_PATH` | SQLite database file path | `~/.claude/agent-chat.db` |
+| `CHAT_DB_PATH` | SQLite database file path | `~/.agent-chat/agent-chat.db` |
 | `STATIC_DIR` | Path to built React SPA | `agent_chat_mcp/static/` (bundled in wheel) |
 
 ## MCP Registration

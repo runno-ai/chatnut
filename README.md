@@ -98,7 +98,7 @@ Add to your MCP client config (server must be running):
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `CHAT_DB_PATH` | `~/.claude/agent-chat.db` | SQLite database path |
+| `CHAT_DB_PATH` | `~/.agent-chat/agent-chat.db` | SQLite database path |
 | `STATIC_DIR` | `agent_chat_mcp/static/` (bundled) | Path to built React SPA |
 
 ---

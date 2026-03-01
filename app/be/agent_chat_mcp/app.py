@@ -29,7 +29,7 @@ def _default_static_dir() -> str:
     return str(Path(__file__).parent / "static")
 
 
-DB_PATH = os.path.expanduser(os.environ.get("CHAT_DB_PATH", "~/.claude/agent-chat.db"))
+DB_PATH = os.path.expanduser(os.environ.get("CHAT_DB_PATH", "~/.agent-chat/agent-chat.db"))
 STATIC_DIR = os.environ.get("STATIC_DIR", _default_static_dir())
 
 
