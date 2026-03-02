@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 AUTO_ARCHIVE_INTERVAL = 300  # check every 5 minutes
 AUTO_ARCHIVE_INACTIVE_SECONDS = 7200  # archive after 2 hours of inactivity
 
+from agent_chat_mcp.config import DB_PATH
 from agent_chat_mcp.db import init_db
 from agent_chat_mcp.service import ChatService
 from agent_chat_mcp import mcp as mcp_module
@@ -29,7 +30,6 @@ def _default_static_dir() -> str:
     return str(Path(__file__).parent / "static")
 
 
-DB_PATH = os.path.expanduser(os.environ.get("CHAT_DB_PATH", "~/.claude/agent-chat.db"))
 STATIC_DIR = os.environ.get("STATIC_DIR", _default_static_dir())
 
 
@@ -75,7 +75,7 @@ async def app_lifespan(app):
 
 
 app = FastAPI(
-    title="Team Chat",
+    title="Agent Chat",
     lifespan=combine_lifespans(app_lifespan, mcp_app.lifespan),
 )
 

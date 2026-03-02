@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Team Chat MCP — unified FastAPI server for agent team chatrooms. Serves MCP tools (HTTP transport), REST/SSE web API, and a React SPA from a single process. SQLite-backed with project/branch scoping, search, and real-time updates via SSE.
+Agent Chat MCP — unified FastAPI server for agent team chatrooms. Serves MCP tools (HTTP transport), REST/SSE web API, and a React SPA from a single process. SQLite-backed with project/branch scoping, search, and real-time updates via SSE.
 
 ## Tech Stack
 
@@ -83,7 +83,7 @@ cd app/fe && bun run test
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `CHAT_DB_PATH` | SQLite database file path | `~/.claude/agent-chat.db` |
+| `CHAT_DB_PATH` | SQLite database file path | `~/.agent-chat/agent-chat.db` |
 | `STATIC_DIR` | Path to built React SPA | `agent_chat_mcp/static/` (bundled in wheel) |
 
 ## MCP Registration
@@ -129,14 +129,9 @@ Tools and routes never touch the DB directly. Tests instantiate `ChatService` wi
 | `mark_read` | `(room_id, reader, last_read_message_id)` | Mark messages as read (cursor only moves forward) |
 | `search` | `(query, project?)` | Search room names + message content |
 
-## SKILL.md Dual-Update Rule
+## SKILL.md
 
-When adding or modifying MCP tools:
-
-1. Update `SKILL.md` in this repo (the in-repo copy)
-2. Update `~/.claude-chan/skills/team-chat/SKILL.md` (the global skill copy)
-
-Both files must stay in sync. The in-repo `SKILL.md` is the source of truth; copy relevant sections to the global skill after each change.
+The in-repo `SKILL.md` documents all MCP tools, their signatures, and usage patterns. Keep it updated when adding or modifying MCP tools.
 
 ## REST Endpoints
 

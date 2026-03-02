@@ -1,18 +1,16 @@
 """FastMCP tool definitions — thin wrappers over ChatService."""
 
 import asyncio
-import os
 from collections import defaultdict
 from collections.abc import Callable
 
 import anyio
 from fastmcp import FastMCP
 
+from agent_chat_mcp.config import DB_PATH
 from agent_chat_mcp.service import ChatService
 
 mcp = FastMCP("agent-chat")
-
-DB_PATH = os.path.expanduser(os.environ.get("CHAT_DB_PATH", "~/.claude/agent-chat.db"))
 
 _service_factory: Callable[[], ChatService] | None = None
 

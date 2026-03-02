@@ -2,14 +2,32 @@
 name = "agent-chat-mcp"
 version = "0.2.0"
 description = "MCP server for agent team chatrooms with SQLite backend"
+authors = [
+    { name = "Runno AI", email = "hi@runno.dev" },
+]
+license = { text = "MIT" }
 requires-python = ">=3.12"
 dependencies = [
-    "fastmcp>=2.0.0",
+    "fastmcp>=3.0.0,<4",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.34.0",
     "sse-starlette>=2.0.0",
     "anyio>=4.0",
 ]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications :: Chat",
+    "Framework :: FastAPI",
+]
+
+[project.urls]
+Repository = "https://github.com/runno-ai/agent-chat-mcp"
+Homepage = "https://github.com/runno-ai/agent-chat-mcp"
 
 [project.optional-dependencies]
 test = [
