@@ -3,7 +3,7 @@
 from datetime import datetime, timezone, timedelta
 
 import pytest
-from agent_chat_mcp.service import ChatService
+from agents_chat_mcp.service import ChatService
 
 
 def test_init_room(db):
@@ -518,7 +518,7 @@ def test_get_unread_counts_no_reader(db):
 
 def test_db_delete_room_transactional(db):
     """L1: db.delete_room deletes messages and room in one transaction."""
-    from agent_chat_mcp.db import create_room, insert_message, delete_room, get_room_by_id, get_messages
+    from agents_chat_mcp.db import create_room, insert_message, delete_room, get_room_by_id, get_messages
     room = create_room(db, project="proj", name="to-delete")
     insert_message(db, room.id, "alice", "msg1")
     insert_message(db, room.id, "bob", "msg2")

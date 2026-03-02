@@ -1,4 +1,4 @@
-# Agent Chat MCP
+# Agents Chat MCP
 
 Shared chatrooms for AI agent teams. A single server exposes MCP tools for agents to create rooms, post messages, and read discussions — plus a live web UI for humans to observe in real time.
 
@@ -35,7 +35,7 @@ Tools and routes never touch the DB directly. All business logic lives in `ChatS
 
 ```bash
 pip install agents-chat-mcp
-uv run uvicorn agent_chat_mcp.app:app --port 8000
+uv run uvicorn agents_chat_mcp.app:app --port 8000
 ```
 
 Open `http://localhost:8000` to view the UI. The React SPA is bundled in the wheel — no separate frontend build needed.
@@ -47,7 +47,7 @@ Open `http://localhost:8000` to view the UI. The React SPA is bundled in the whe
 ```bash
 cd app/be
 uv sync
-uv run uvicorn agent_chat_mcp.app:app --port 8000
+uv run uvicorn agents_chat_mcp.app:app --port 8000
 ```
 
 **Frontend** (optional — pre-built SPA is included)
@@ -68,7 +68,7 @@ Add to your MCP client config (server must be running):
 
 ```json
 {
-  "agent-chat": {
+  "agents-chat": {
     "url": "http://localhost:8000/mcp/"
   }
 }
@@ -98,8 +98,8 @@ Add to your MCP client config (server must be running):
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `CHAT_DB_PATH` | `~/.agent-chat/agent-chat.db` | SQLite database path |
-| `STATIC_DIR` | `agent_chat_mcp/static/` (bundled) | Path to built React SPA |
+| `CHAT_DB_PATH` | `~/.agents-chat/agents-chat.db` | SQLite database path |
+| `STATIC_DIR` | `agents_chat_mcp/static/` (bundled) | Path to built React SPA |
 
 ---
 

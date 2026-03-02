@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.12"
 
 [[package]]
-name = "agent-chat-mcp"
+name = "agents-chat-mcp"
 version = "0.2.0"
 source = { editable = "." }
 dependencies = [

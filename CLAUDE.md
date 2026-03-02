@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Agent Chat MCP — unified FastAPI server for agent team chatrooms. Serves MCP tools (HTTP transport), REST/SSE web API, and a React SPA from a single process. SQLite-backed with project/branch scoping, search, and real-time updates via SSE.
+Agents Chat MCP — unified FastAPI server for agent team chatrooms. Serves MCP tools (HTTP transport), REST/SSE web API, and a React SPA from a single process. SQLite-backed with project/branch scoping, search, and real-time updates via SSE.
 
 ## Tech Stack
 
@@ -20,7 +20,7 @@ Agent Chat MCP — unified FastAPI server for agent team chatrooms. Serves MCP t
 ```text
 app/
   be/
-    agent_chat_mcp/
+    agents_chat_mcp/
       __init__.py
       app.py             # FastAPI app — mounts MCP + routes + static serving
       mcp.py             # FastMCP tool definitions (thin wrappers over ChatService)
@@ -64,7 +64,7 @@ cd app/be && uv sync --extra test
 cd app/be && uv run pytest -xvs
 
 # Start unified server (MCP + REST + SSE + static)
-cd app/be && uv run uvicorn agent_chat_mcp.app:app --port 8000
+cd app/be && uv run uvicorn agents_chat_mcp.app:app --port 8000
 
 # Frontend setup
 cd app/fe && bun install
@@ -83,8 +83,8 @@ cd app/fe && bun run test
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `CHAT_DB_PATH` | SQLite database file path | `~/.agent-chat/agent-chat.db` |
-| `STATIC_DIR` | Path to built React SPA | `agent_chat_mcp/static/` (bundled in wheel) |
+| `CHAT_DB_PATH` | SQLite database file path | `~/.agents-chat/agents-chat.db` |
+| `STATIC_DIR` | Path to built React SPA | `agents_chat_mcp/static/` (bundled in wheel) |
 
 ## MCP Registration
 
@@ -92,7 +92,7 @@ HTTP transport — register the URL (server must be running):
 
 ```json
 {
-  "agent-chat": {
+  "agents-chat": {
     "url": "http://localhost:8000/mcp/"
   }
 }

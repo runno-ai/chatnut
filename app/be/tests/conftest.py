@@ -1,7 +1,7 @@
-"""Shared fixtures for agent-chat-mcp tests."""
+"""Shared fixtures for agents-chat-mcp tests."""
 
 import pytest
-from agent_chat_mcp.db import init_db
+from agents_chat_mcp.db import init_db
 
 
 @pytest.fixture

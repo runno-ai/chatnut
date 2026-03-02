@@ -1,4 +1,4 @@
-# Releasing agent-chat-mcp
+# Releasing agents-chat-mcp
 
 ## Branching Model
 
@@ -19,10 +19,10 @@ The CD workflow uses OIDC Trusted Publishing — no stored secrets needed.
 
 Configure once in PyPI project settings:
 
-1. Go to https://pypi.org/manage/project/agent-chat-mcp/settings/publishing/
+1. Go to https://pypi.org/manage/project/agents-chat-mcp/settings/publishing/
 2. Add a new Trusted Publisher with:
    - **Owner:** `runno-ai`
-   - **Repository:** `agent-chat-mcp`
+   - **Repository:** `agents-chat-mcp`
    - **Workflow filename:** `cd.yml`
    - **Environment:** _(leave blank)_
 3. Save. No GitHub secret needed.
@@ -37,7 +37,7 @@ Configure once in PyPI project settings:
    - Builds and bundles frontend into the wheel
    - Publishes `{version}rc{run_number}` to PyPI (pre-release)
    - Creates GitHub pre-release with auto-generated notes
-4. Verify: `pip install agent-chat-mcp --pre`
+4. Verify: `pip install agents-chat-mcp --pre`
 
 ### Stable release (merge `test` → `main`)
 
@@ -63,7 +63,7 @@ This ensures the stable release uses the intended version.
 
 ```bash
 # Check PyPI
-pip install agent-chat-mcp==0.3.0
+pip install agents-chat-mcp==0.3.0
 
 # Check GitHub Releases
 gh release list --repo runno-ai/agent-chat-mcp

@@ -97,10 +97,10 @@ jobs:
       # ── Bundle frontend into Python package ───────────────────────────
       - name: Bundle frontend into package
         run: |
-          mkdir -p app/be/agent_chat_mcp/static
-          cp app/fe/dist/index.html app/be/agent_chat_mcp/static/index.html
+          mkdir -p app/be/agents_chat_mcp/static
+          cp app/fe/dist/index.html app/be/agents_chat_mcp/static/index.html
           echo "Bundled frontend:"
-          ls -lh app/be/agent_chat_mcp/static/
+          ls -lh app/be/agents_chat_mcp/static/
 
       # ── Set pre-release version in pyproject.toml (test branch only) ──
       - name: Set pre-release version in pyproject.toml
@@ -167,7 +167,7 @@ jobs:
           EXISTS=$(python3 -c "
           import urllib.request, sys
           try:
-              urllib.request.urlopen('https://pypi.org/pypi/agent-chat-mcp/${VERSION}/json')
+              urllib.request.urlopen('https://pypi.org/pypi/agents-chat-mcp/${VERSION}/json')
               print('true')
           except Exception:
               print('false')

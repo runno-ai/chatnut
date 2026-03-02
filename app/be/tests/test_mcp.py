@@ -2,7 +2,7 @@
 
 import pytest
 
-from agent_chat_mcp.mcp import mcp
+from agents_chat_mcp.mcp import mcp
 
 
 @pytest.mark.anyio
@@ -21,7 +21,7 @@ async def test_all_tools_registered():
 @pytest.mark.anyio
 async def test_mark_read_tool_registered():
     """Verify mark_read is in the tool list."""
-    from agent_chat_mcp.mcp import mcp
+    from agents_chat_mcp.mcp import mcp
     tools = await mcp.list_tools()
     tool_names = [t.name for t in tools]
     assert "mark_read" in tool_names

@@ -1,7 +1,7 @@
 """Integration tests — verify full tool flows end-to-end via ChatService."""
 
 import pytest
-from agent_chat_mcp.service import ChatService
+from agents_chat_mcp.service import ChatService
 
 
 def test_full_lifecycle(db):
@@ -176,5 +176,5 @@ def test_delete_room_cascades_read_cursors(db):
     svc.archive_room("proj", "dev")
     svc.delete_room(room["id"])
     # Cursor should be gone (no orphaned data)
-    from agent_chat_mcp.db import get_read_cursor
+    from agents_chat_mcp.db import get_read_cursor
     assert get_read_cursor(db, room["id"], "bob") is None

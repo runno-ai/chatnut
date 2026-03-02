@@ -1,4 +1,4 @@
-# agent_chat_mcp/routes.py
+# agents_chat_mcp/routes.py
 """REST + SSE endpoints for the web UI."""
 
 import anyio

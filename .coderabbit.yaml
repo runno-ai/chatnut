@@ -98,7 +98,7 @@ reviews:
            - Request changes if test coverage is insufficient
 
     # === Backend: Python/FastAPI ===
-    - path: 'app/be/agent_chat_mcp/db.py'
+    - path: 'app/be/agents_chat_mcp/db.py'
       instructions: |
         SQLite schema, migrations, and query layer. Verify:
         - All queries use parameterized ? placeholders (no string interpolation)
@@ -108,7 +108,7 @@ reviews:
         - INSERT OR IGNORE for idempotent room creation
         - limit+1 pagination pattern for has_more detection
 
-    - path: 'app/be/agent_chat_mcp/service.py'
+    - path: 'app/be/agents_chat_mcp/service.py'
       instructions: |
         ChatService business logic layer. Verify:
         - All public methods return dicts (not model objects)
@@ -116,14 +116,14 @@ reviews:
         - Archived room rejection for post_message
         - No direct SQL — delegates to db.py functions
 
-    - path: 'app/be/agent_chat_mcp/mcp.py'
+    - path: 'app/be/agents_chat_mcp/mcp.py'
       instructions: |
         FastMCP tool definitions (thin wrappers over ChatService). Verify:
         - Tools use _service_factory() set by app.py (not own DB connection)
         - Tool docstrings are clear (shown to LLM agents)
         - No business logic in tools — delegate to ChatService
 
-    - path: 'app/be/agent_chat_mcp/app.py'
+    - path: 'app/be/agents_chat_mcp/app.py'
       instructions: |
         FastAPI application entry point. Verify:
         - mcp.http_app(path="/") + app.mount("/mcp") to avoid double prefix
@@ -133,7 +133,7 @@ reviews:
         - _default_static_dir() returns Path(__file__).parent / "static"
         - Frontend-not-built returns 503 (not 200)
 
-    - path: 'app/be/agent_chat_mcp/routes.py'
+    - path: 'app/be/agents_chat_mcp/routes.py'
       instructions: |
         REST + SSE endpoints for the web UI. Verify:
         - Routes use service layer (never direct DB access)
