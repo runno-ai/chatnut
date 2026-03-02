@@ -157,8 +157,53 @@ You may be woken up multiple times:
 - **Round 2:** Read others' posts and respond — agree, challenge, or extend
 - **Round 3:** Resolve remaining disagreements
 
+### MCP Fallback
+If `mcp__agents-chat__*` tools are unavailable (tool call fails, tool not in your list, server error):
+- **Do NOT silently drop your findings**
+- Send your full content to the team leader via SendMessage:
+
+  SendMessage(type="message", recipient="<team-leader-name>",
+    content="[CHATROOM FALLBACK] MCP unavailable.\n\n<your full findings here>",
+    summary="<role> findings — MCP fallback")
+
+- The team leader will relay or incorporate your findings directly.
+
 A live web UI is running — the PM observes all messages in real-time.
 ```
+
+## MCP Fallback (SendMessage)
+
+If `mcp__agents-chat__*` tools are **unavailable** — server down, tool not in the teammate's tool list, or any tool error — fall back to `SendMessage` directed at the **team leader**.
+
+### Detection
+
+A teammate should switch to fallback mode when:
+- Any `mcp__agents-chat__*` call returns an error or is not available
+- The `mcp__agents-chat__ping` health check fails
+- The tool is simply absent from the teammate's tool list
+
+### Fallback Behavior (Teammate)
+
+1. **Send full content** — do NOT trim to a ping; include everything the chatroom post would have contained
+2. **Prefix with `[CHATROOM FALLBACK]`** — signals to the leader that MCP is down for this agent
+3. **Direct to team leader** — always send to the PM/orchestrator, not peers
+4. **Continue working** — one failed MCP call does not stop the task; proceed and report via SendMessage
+
+```
+SendMessage(
+  type="message",
+  recipient="<team-leader-name>",
+  content="[CHATROOM FALLBACK] mcp__agents-chat unavailable.\n\n## My Findings\n\n<full content>",
+  summary="<role> findings (MCP fallback)"
+)
+```
+
+### PM Handling of Fallback Messages
+
+When the PM receives a `[CHATROOM FALLBACK]` message:
+1. **If MCP is available on PM's end** — relay the content to the chatroom via `post_message` on behalf of the teammate, then continue normally
+2. **If MCP is also down** — incorporate findings directly into PM's own work; note the teammate's contribution in any final summary
+3. **Do NOT ignore** — fallback messages carry real work output, treat them as chatroom posts
 
 ## Team Lifecycle (PM Rules)
 
@@ -207,7 +252,7 @@ The server runs persistently at your configured URL. Features:
 
 **Prod DB:** `~/.agents-chat/agents-chat.db` — always-on service, never modified by `ss`.
 
-**Dev DB:** `data/dev.db` — committed demo fixture, served by `agents-chat-dev` (start via `ss → 4 → DEV`).
+**Dev DB:** `data/dev.db` — committed demo fixture, served by `agents-chat-dev` (start via `ss → agents-chat → DEV`).
 - Seed/reset: `cd app/be && uv run python ../../data/seed.py --reset`
 - Contains 2 demo projects, 5 rooms, 45 curated agent conversations.
 
