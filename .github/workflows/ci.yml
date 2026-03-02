@@ -6,6 +6,14 @@ on:
   pull_request:
     branches: [main, test]
 
+# Cancel in-progress CI runs on the same branch when new commits arrive.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   backend:
     name: Backend Tests
@@ -26,9 +34,17 @@ jobs:
         with:
           python-version-file: app/be/.python-version
 
-      - run: uv sync --extra test
+      - name: Install dependencies
+        run: uv sync --frozen --extra test
 
-      - run: uv run pytest -x --tb=short
+      - name: Run tests
+        run: uv run pytest -x --tb=short
+
+      - name: Audit dependencies
+        shell: bash
+        run: |
+          uv pip compile pyproject.toml --extra test -o /tmp/audit-reqs.txt 2>/dev/null || true
+          uvx pip-audit --requirement /tmp/audit-reqs.txt || true
 
   frontend:
     name: Frontend
@@ -48,7 +64,8 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('app/fe/bun.lockb') }}
           restore-keys: bun-${{ runner.os }}-
 
-      - run: bun install --frozen-lockfile
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
       - name: Typecheck
         run: bunx tsc --noEmit
