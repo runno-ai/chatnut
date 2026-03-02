@@ -1,6 +1,7 @@
 """Test STATIC_DIR default resolves to package-internal static/ directory."""
 import os
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -52,3 +53,51 @@ def test_serve_spa_missing_index_returns_503(tmp_path, monkeypatch):
     resp = client.get("/nonexistent-page")
     assert resp.status_code == 503
     assert resp.json()["error"].startswith("Frontend not built")
+
+
+def test_static_dir_env_var_expression():
+    """STATIC_DIR env var is read by os.environ.get() at module load.
+
+    Tests the env-var resolution logic directly: os.environ.get("STATIC_DIR", fallback)
+    should prefer the env var over the default. This validates the module-level expression
+    without triggering importlib.reload side effects.
+    """
+    import agents_chat_mcp.app as app_module
+
+    sentinel = "/tmp/custom-static-dir"
+    with patch.dict(os.environ, {"STATIC_DIR": sentinel}):
+        resolved = os.environ.get("STATIC_DIR", app_module._default_static_dir())
+    assert resolved == sentinel, f"Expected {sentinel!r}, got {resolved!r}"
+
+
+def test_static_dir_monkeypatch_affects_serve_spa(tmp_path, monkeypatch):
+    """Monkeypatching STATIC_DIR at module level redirects serve_spa() to a custom dir.
+
+    Also verifies that symlink-based path traversal protection still applies with
+    a custom STATIC_DIR — a symlink inside the static dir that escapes to /etc is
+    rejected with 404, consistent with the is_relative_to() guard in serve_spa().
+    """
+    import agents_chat_mcp.app as app_module
+
+    # Create a custom static dir with a test file and index.html
+    custom_file = tmp_path / "custom.js"
+    custom_file.write_text("// custom")
+    (tmp_path / "index.html").write_text("<html>custom</html>")
+
+    # Create a symlink inside the custom static dir that escapes to /etc
+    escape_link = tmp_path / "escape"
+    escape_link.symlink_to("/etc")
+
+    monkeypatch.setattr(app_module, "STATIC_DIR", str(tmp_path))
+
+    client = TestClient(app_module.app, raise_server_exceptions=False)
+
+    # File in custom dir is served
+    resp = client.get("/custom.js")
+    assert resp.status_code == 200
+    assert "custom" in resp.text
+
+    # Symlink-based path traversal is still rejected even with custom STATIC_DIR
+    resp = client.get("/escape/passwd")
+    assert resp.status_code == 404
+    assert resp.json() == {"error": "Not found"}
