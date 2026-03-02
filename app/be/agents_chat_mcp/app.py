@@ -60,7 +60,7 @@ async def _auto_archive_loop() -> None:
 
 
 @asynccontextmanager
-async def app_lifespan(app):
+async def app_lifespan(app: FastAPI):
     # Ensure service is initialized at startup
     _get_service()
     mcp_module.set_event_loop(asyncio.get_running_loop())

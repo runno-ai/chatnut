@@ -93,7 +93,17 @@ def post_message(
     content: str,
     message_type: str = "message",
 ) -> dict:
-    """Post a message to a room by room_id (from init_room). Rejects posts to archived rooms."""
+    """Post a message to a room by room_id (from init_room). Rejects posts to archived rooms.
+
+    Args:
+        room_id: The room UUID returned by init_room.
+        sender: Name or identifier of the message sender.
+        content: Message text content.
+        message_type: Must be 'message' (default) or 'system'.
+
+    Raises:
+        ValueError: If the room is archived or does not exist.
+    """
     result = _get_service().post_message_by_room_id(room_id, sender, content, message_type=message_type)
     _notify_waiters(room_id)  # only reached on successful insert
     return result
@@ -106,7 +116,17 @@ def read_messages(
     limit: int = 100,
     message_type: str | None = None,
 ) -> dict:
-    """Read messages from a room by room_id. Use since_id for incremental reads. Default limit 100."""
+    """Read messages from a room by room_id. Use since_id for incremental reads. Default limit 100.
+
+    Args:
+        room_id: The room UUID returned by init_room.
+        since_id: Only return messages with id > since_id (incremental reads).
+        limit: Maximum messages to return (default 100).
+        message_type: Filter by type — 'message', 'system', or None for all.
+
+    Returns:
+        {"messages": [...], "has_more": bool}
+    """
     return _get_service().read_messages_by_room_id(room_id, since_id=since_id, limit=limit, message_type=message_type)
 
 
@@ -227,7 +247,18 @@ def clear_room(project: str, name: str) -> dict:
 
 @mcp.tool()
 def search(query: str, project: str | None = None) -> dict:
-    """Search room names and message content. Optionally filter by project."""
+    """Search room names and message content. Optionally filter by project.
+
+    Args:
+        query: Text to search (case-insensitive LIKE match). Must be non-empty.
+        project: Optional project filter.
+
+    Returns:
+        {"rooms": [...], "message_rooms": [{"room_id": ..., "match_count": ...}]}
+
+    Raises:
+        ValueError: If query is empty or whitespace-only.
+    """
     return _get_service().search(query, project=project)
 
 

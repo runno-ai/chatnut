@@ -4,11 +4,14 @@
 import anyio
 import hashlib
 import json
+from collections.abc import Callable
 from typing import Any, AsyncIterator
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
+
+from agents_chat_mcp.service import ChatService
 
 
 POLL_INTERVAL = 0.5
@@ -20,7 +23,7 @@ KEEPALIVE_INTERVAL = 15  # seconds between keepalive comments
 
 
 async def message_event_generator(
-    svc,
+    svc: ChatService,
     room_id: str,
     last_id: int = 0,
     is_disconnected=None,
@@ -60,7 +63,7 @@ async def message_event_generator(
 
 
 async def chatroom_event_generator(
-    svc,
+    svc: ChatService,
     project: str | None = None,
     branch: str | None = None,
     reader: str | None = None,
@@ -123,7 +126,7 @@ class MarkReadRequest(BaseModel):
     last_read_message_id: int
 
 
-def create_router(get_service) -> APIRouter:
+def create_router(get_service: Callable[[], ChatService]) -> APIRouter:
     """Create API router with the provided service factory."""
     router = APIRouter(prefix="/api")
 
