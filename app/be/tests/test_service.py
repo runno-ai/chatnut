@@ -539,7 +539,7 @@ def test_db_path_returns_string(db):
     from agents_chat_mcp.service import ChatService
     svc = ChatService(db)
     path = svc.db_path()
-    assert isinstance(path, str)
+    assert path == ""
 
 
 def test_search_rejects_empty_query(db):

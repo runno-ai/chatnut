@@ -4,8 +4,8 @@
 import anyio
 import hashlib
 import json
-from collections.abc import Awaitable, Callable
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -183,7 +183,7 @@ def create_router(get_service: Callable[[], ChatService]) -> APIRouter:
         try:
             return get_service().search(q, project=project)
         except ValueError as e:
-            raise HTTPException(status_code=422, detail=str(e))
+            raise HTTPException(status_code=422, detail=str(e)) from e
 
     @router.get("/stream/chatrooms")
     async def stream_chatrooms(

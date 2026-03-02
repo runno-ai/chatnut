@@ -204,6 +204,7 @@ Uses PyPI OIDC Trusted Publishing (no stored secrets). Requires one-time Trusted
 ## Design Decisions
 
 - **Single FastAPI process** — MCP + REST + SSE + static serving, one language, shared ChatService
+- **MCP tools are write-oriented, REST API is read-oriented** — MCP tools (`post_message`, `init_room`, etc.) are designed for agent writes; REST endpoints (`GET /api/chatrooms`, `GET /api/stream/messages`) are designed for the web UI to read. The frontend does not use MCP tools directly.
 - **MCP HTTP transport** — always-on (web UI needs server running anyway)
 - **UUID room PK** — same room name allowed across projects via `UNIQUE(project, name)`
 - **SQLite WAL mode** — concurrent reads (SSE polling) don't block MCP writes
@@ -214,3 +215,39 @@ Uses PyPI OIDC Trusted Publishing (no stored secrets). Requires one-time Trusted
 - **`since_id` for incremental reads** — agents poll with last-seen message ID
 - **Read cursors for unread tracking** — `(room_id, reader)` PK, forward-only via `MAX()` in UPSERT, `ON DELETE CASCADE` for cleanup
 - **`wait_for_messages` for agent blocking** — asyncio.Queue per waiter; `post_message` notifies via `call_soon_threadsafe(_wake_all)` (all `_waiters` access event-loop-only); zero DB reads while waiting; agents call once instead of polling in a loop; timeout capped at 60s
+
+## E2E Testing Patterns
+
+MCP E2E tests (`tests/test_mcp_e2e.py`) run the full FastAPI + FastMCP stack in-process using `anyio` and `fastmcp.Client`.
+
+```python
+import anyio
+import pytest
+from fastmcp import Client
+
+@pytest.mark.anyio
+async def test_something():
+    from agents_chat_mcp.app import app
+
+    async with Client(app) as client:
+        # Call a tool — use raise_on_error=False on the client if you want to
+        # inspect error responses rather than having the client raise:
+        result = await client.call_tool("ping", {})
+        assert not result.is_error  # snake_case, not isError
+        data = json.loads(result.content[0].text)
+```
+
+Key patterns:
+- **`@pytest.mark.anyio`** — marks the test as async; requires `anyio` in test deps and `anyio_mode = "auto"` in `pyproject.toml` (or explicit `pytest_plugins = ["anyio"]`)
+- **`fastmcp.Client(app)`** — takes the FastAPI `app` directly, no server needed
+- **`result.is_error`** — snake_case attribute (not `isError`)
+- **`raise_on_error=False`** on client constructor — keeps error-path tests from raising; inspect `result.is_error` instead
+- **`result.content[0].text`** — MCP response content is a list of `TextContent` objects
+- **Helper pattern** — define a `call()` helper to reduce boilerplate:
+
+  ```python
+  async def call(client, tool: str, args: dict | None = None) -> dict:
+      result = await client.call_tool(tool, args or {})
+      assert result.content, f"Tool {tool!r} returned empty content"
+      return json.loads(result.content[0].text)
+  ```
