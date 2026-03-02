@@ -32,13 +32,13 @@ async def mcp_svc(db):
     yield svc
     mcp_module.set_service_factory(original_factory)
     mcp_module.set_event_loop(None)
-    if hasattr(mcp_module, "_waiters"):
-        mcp_module._waiters.clear()
+    mcp_module._waiters.clear()
 
 
 async def call(client, tool: str, args: dict | None = None):
     """Call a tool and return the parsed dict response."""
     result = await client.call_tool(tool, args or {})
+    assert result.content, f"Tool {tool!r} returned empty content"
     return json.loads(result.content[0].text)
 
 

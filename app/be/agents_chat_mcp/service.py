@@ -35,6 +35,8 @@ class ChatService:
 
         Returns empty string for in-memory databases.
         """
+        # PRAGMA database_list returns rows of (seq, name, file_path).
+        # seq=0 is always the main database. Returns empty string for :memory: DBs.
         row = self.db.execute("PRAGMA database_list").fetchone()
         return row[2] if row else ""
 

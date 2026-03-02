@@ -71,7 +71,7 @@ def _notify_waiters(room_id: str) -> None:
 
 @mcp.tool()
 def ping() -> dict:
-    """Health check — returns DB path and status."""
+    """Health check — returns the database file path and 'ok' status."""
     return {"db_path": _get_service().db_path(), "status": "ok"}
 
 

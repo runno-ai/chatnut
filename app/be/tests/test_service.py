@@ -545,7 +545,6 @@ def test_db_path_returns_string(db):
 def test_search_rejects_empty_query(db):
     """ChatService.search() raises ValueError for empty or whitespace-only queries."""
     from agents_chat_mcp.service import ChatService
-    import pytest
     svc = ChatService(db)
     with pytest.raises(ValueError, match="query"):
         svc.search("")

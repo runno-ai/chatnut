@@ -10,6 +10,7 @@
 
 <!-- How was this tested? -->
 - [ ] Backend tests pass (`cd app/be && uv run pytest -x`)
+- [ ] Frontend tests pass (`cd app/fe && bun run test`)
 - [ ] Frontend builds (`cd app/fe && bun run build`)
 - [ ] TypeScript passes (`cd app/fe && bun run tsc --noEmit`)
 

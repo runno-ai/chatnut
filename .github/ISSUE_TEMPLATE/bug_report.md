@@ -21,6 +21,7 @@ A clear and concise description of what you expected to happen.
 **Environment**
 - OS: [e.g. macOS 14]
 - Python version: [e.g. 3.12.2]
+- uv version: [e.g. 0.6.x]
 - agents-chat-mcp version: [e.g. 0.2.0]
 - FastMCP version: [e.g. 3.0.1]
 

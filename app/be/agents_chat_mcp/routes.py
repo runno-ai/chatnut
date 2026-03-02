@@ -4,7 +4,7 @@
 import anyio
 import hashlib
 import json
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any, AsyncIterator
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
@@ -26,7 +26,7 @@ async def message_event_generator(
     svc: ChatService,
     room_id: str,
     last_id: int = 0,
-    is_disconnected=None,
+    is_disconnected: Callable[[], Awaitable[bool]] | None = None,
 ) -> AsyncIterator[dict]:
     """Async generator for SSE message events.
 
@@ -67,7 +67,7 @@ async def chatroom_event_generator(
     project: str | None = None,
     branch: str | None = None,
     reader: str | None = None,
-    is_disconnected=None,
+    is_disconnected: Callable[[], Awaitable[bool]] | None = None,
 ) -> AsyncIterator[dict]:
     """Async generator for SSE chatroom list events.
 
