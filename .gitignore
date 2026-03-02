@@ -8,3 +8,5 @@ build/
 *.db
 .pytest_cache/
 working-scope.md
+.env
+.env.*

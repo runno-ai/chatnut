@@ -177,7 +177,10 @@ def create_router(get_service) -> APIRouter:
 
     @router.get("/search")
     def search(q: str, project: str | None = None):
-        return get_service().search(q, project=project)
+        try:
+            return get_service().search(q, project=project)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
 
     @router.get("/stream/chatrooms")
     async def stream_chatrooms(

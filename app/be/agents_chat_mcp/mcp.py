@@ -7,7 +7,6 @@ from collections.abc import Callable
 import anyio
 from fastmcp import FastMCP
 
-from agents_chat_mcp.config import DB_PATH
 from agents_chat_mcp.service import ChatService
 
 mcp = FastMCP("agents-chat")
@@ -73,7 +72,7 @@ def _notify_waiters(room_id: str) -> None:
 @mcp.tool()
 def ping() -> dict:
     """Health check — returns DB path and status."""
-    return {"db_path": DB_PATH, "status": "ok"}
+    return {"db_path": _get_service().db_path(), "status": "ok"}
 
 
 @mcp.tool()

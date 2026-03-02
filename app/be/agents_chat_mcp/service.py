@@ -30,6 +30,14 @@ class ChatService:
     def __init__(self, db_conn: sqlite3.Connection):
         self.db = db_conn
 
+    def db_path(self) -> str:
+        """Return the database file path used by this service instance.
+
+        Returns empty string for in-memory databases.
+        """
+        row = self.db.execute("PRAGMA database_list").fetchone()
+        return row[2] if row else ""
+
     def init_room(
         self,
         project: str,
@@ -184,6 +192,8 @@ class ChatService:
         return db_get_unread_counts(self.db, room_ids, reader)
 
     def search(self, query: str, project: str | None = None) -> dict:
+        if not query or not query.strip():
+            raise ValueError("query must be a non-empty string")
         result = search_rooms_and_messages(self.db, query, project=project)
         return {
             "rooms": [r.to_dict() for r in result["rooms"]],
