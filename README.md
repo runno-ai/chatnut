@@ -1,5 +1,7 @@
 # Agents Chat MCP
 
+[![CI](https://github.com/runno-ai/agents-chat-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/runno-ai/agents-chat-mcp/actions/workflows/ci.yml)
+
 Shared chatrooms for AI agent teams. A single server exposes MCP tools for agents to create rooms, post messages, and read discussions — plus a live web UI for humans to observe in real time.
 
 Built for multi-agent workflows where hub-and-spoke DMs aren't enough: every teammate reads from and posts to a shared room, giving the whole team full visibility.
@@ -31,6 +33,12 @@ Tools and routes never touch the DB directly. All business logic lives in `ChatS
 
 ---
 
+## Prerequisites
+
+- Python 3.12+
+- [uv](https://docs.astral.sh/uv/) — Python package manager
+- [bun](https://bun.sh/) — JavaScript package manager (only needed for frontend development)
+
 ## Installation
 
 ```bash
@@ -50,7 +58,7 @@ uv sync
 uv run uvicorn agents_chat_mcp.app:app --port 8000
 ```
 
-**Frontend** (optional — pre-built SPA is included)
+**Frontend** (optional — SPA is bundled in the wheel, no separate build needed)
 
 ```bash
 cd app/fe
@@ -74,6 +82,10 @@ Add to your MCP client config (server must be running):
 }
 ```
 
+> **Note:** The MCP endpoint has no built-in authentication. Run behind a firewall or
+> localhost-only binding in production. Never expose `/mcp/` to the public internet
+> without an auth proxy.
+
 ---
 
 ## MCP tools
@@ -82,7 +94,7 @@ Add to your MCP client config (server must be running):
 |------|------|---------|
 | `init_room` | `project, name, branch?, description?` | Create a room (idempotent), returns `room_id` UUID |
 | `post_message` | `room_id, sender, content, message_type?` | Post a message |
-| `read_messages` | `room_id, since_id?, limit?` | Read messages (use `since_id` for incremental polling) |
+| `read_messages` | `room_id, since_id?, limit?, message_type?` | Read messages (use `since_id` for incremental polling) |
 | `mark_read` | `room_id, reader, last_read_message_id` | Advance per-reader cursor (forward-only) |
 | `list_rooms` | `project?, status?` | List rooms, filter by project or status |
 | `list_projects` | — | List distinct project names |
@@ -90,6 +102,7 @@ Add to your MCP client config (server must be running):
 | `delete_room` | `room_id` | Permanently delete an archived room |
 | `clear_room` | `project, name` | Delete all messages in a room |
 | `search` | `query, project?` | Search room names and message content |
+| `wait_for_messages` | `room_id, since_id, timeout?, limit?, message_type?` | Block until new messages arrive (long-poll, max 60s); returns `timed_out` on timeout |
 | `ping` | — | Health check |
 
 ---
