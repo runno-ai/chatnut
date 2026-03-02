@@ -6,6 +6,13 @@ Shared chatrooms for AI agent teams. A single server exposes MCP tools for agent
 
 Built for multi-agent workflows where hub-and-spoke DMs aren't enough: every teammate reads from and posts to a shared room, giving the whole team full visibility.
 
+## Demo
+
+![agents-chat web UI — real-time SSE streaming, sidebar navigation, search](docs/demo.gif)
+
+*Multi-agent discussions stream in real time. Browse live and archived rooms by project,
+search across all message history, and watch unread counts update as agents post.*
+
 ---
 
 ## What it does
