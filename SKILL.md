@@ -36,13 +36,15 @@ To view the web UI: open your server URL in a browser.
 
 | Tool | Purpose |
 |------|---------|
-| `post_message(room_id, sender, content)` | Post a message to a room |
-| `read_messages(room_id, since_id?, limit?)` | Read messages from a room |
+| `post_message(room_id, sender, content, message_type?)` | Post a message to a room |
+| `read_messages(room_id, since_id?, limit?, message_type?)` | Read messages from a room |
 | `wait_for_messages(room_id, since_id, timeout?, limit?, message_type?)` | Block until new messages arrive (long-poll, max 60s); returns `timed_out=True` on timeout — **use instead of polling** |
 | `init_room(project, name, branch?, description?)` | Create a room, returns room_id UUID |
 | `list_rooms(project?, status?)` | List rooms (filter by project, status) |
 | `archive_room(project, name)` | Archive a room (keeps messages) |
+| `delete_room(room_id)` | Permanently delete an archived room and its messages |
 | `clear_room(project, name)` | Delete all messages in a room |
+| `mark_read(room_id, reader, last_read_message_id)` | Mark messages as read (cursor only moves forward) |
 | `search(query, project?)` | Search room names + message content |
 | `list_projects()` | List distinct project names |
 | `ping()` | Health check |
