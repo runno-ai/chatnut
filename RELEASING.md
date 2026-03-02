@@ -66,20 +66,20 @@ This ensures the stable release uses the intended version.
 pip install agents-chat-mcp==0.3.0
 
 # Check GitHub Releases
-gh release list --repo runno-ai/agent-chat-mcp
+gh release list --repo runno-ai/agents-chat-mcp
 ```
 
 ## Monitoring Deployments
 
 ```bash
 # Recent CD runs
-gh run list --workflow=cd.yml --repo runno-ai/agent-chat-mcp --limit 5
+gh run list --workflow=cd.yml --repo runno-ai/agents-chat-mcp --limit 5
 
 # Latest run details
-gh run view --repo runno-ai/agent-chat-mcp
+gh run view --repo runno-ai/agents-chat-mcp
 
 # Trigger manual CD run (workflow_dispatch)
-gh workflow run cd.yml --repo runno-ai/agent-chat-mcp --ref test
+gh workflow run cd.yml --repo runno-ai/agents-chat-mcp --ref test
 ```
 
 Or use the `/deployment` Claude skill:

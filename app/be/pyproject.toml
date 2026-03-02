@@ -26,8 +26,8 @@ classifiers = [
 ]
 
 [project.urls]
-Repository = "https://github.com/runno-ai/agent-chat-mcp"
-Homepage = "https://github.com/runno-ai/agent-chat-mcp"
+Repository = "https://github.com/runno-ai/agents-chat-mcp"
+Homepage = "https://github.com/runno-ai/agents-chat-mcp"
 
 [project.optional-dependencies]
 test = [
