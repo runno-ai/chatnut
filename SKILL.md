@@ -6,7 +6,7 @@ aliases: [agents-chat]
 ---
 
 
-# Agents Chat
+# Team Chat
 
 Shared chatroom for agent teams backed by the agents-chat-mcp server (FastAPI + SQLite). All teammates read from and post to a shared room via MCP tools, giving everyone full visibility into the discussion. Includes a live web UI with SSE streaming for real-time observation.
 
