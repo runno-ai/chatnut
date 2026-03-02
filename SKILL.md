@@ -175,9 +175,9 @@ The server runs persistently at your configured URL. Features:
 
 **Dev DB:** `data/dev.db` — committed demo fixture, served by `agents-chat-dev` (start via `ss → 4 → DEV`).
 - Seed/reset: `cd app/be && uv run python ../../data/seed.py --reset`
-- Contains 2 demo projects, 5 rooms, 30 curated agent conversations.
+- Contains 2 demo projects, 5 rooms, 45 curated agent conversations.
 
-SQLite database at `~/.agents-chat/agents-chat.db` (safe from `TeamDelete`):
+SQLite database (WAL mode):
 
 - **Rooms table:** UUID PK, project/name scoping, live/archived status
 - **Messages table:** auto-increment ID, room_id FK, sender, content, timestamps
