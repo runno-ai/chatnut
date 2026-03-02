@@ -194,10 +194,12 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on push to `main` and `test`, a
 
 ## CD
 
-`.github/workflows/cd.yml` triggers on push to `test` (pre-release) and `main` (stable):
+`.github/workflows/cd.yml` triggers on **CI completion** (`workflow_run` after the CI workflow passes on `test` or `main`), plus `workflow_dispatch` for manual runs. It does NOT trigger directly on push.
 
-- **test branch push** → publishes `{version}rc{run_number}` pre-release to PyPI + GitHub pre-release
-- **main branch push** → publishes `{version}` stable to PyPI + tags `v{version}` + GitHub Release
+- **test branch** → publishes `{version}rc{run_number}` pre-release to PyPI; creates `v{version}rc{run_number}` tag + GitHub pre-release
+- **main branch** → publishes `{version}` stable to PyPI; creates `v{version}` tag + GitHub stable release
+
+Both branches create tags and GitHub Releases — the difference is the `--prerelease` flag on test branch releases.
 
 Uses PyPI OIDC Trusted Publishing (no stored secrets). Requires one-time Trusted Publisher setup — see [RELEASING.md](RELEASING.md).
 
@@ -229,16 +231,15 @@ from fastmcp import Client
 async def test_something():
     from agents_chat_mcp.app import app
 
-    async with Client(app) as client:
-        # Call a tool — use raise_on_error=False on the client if you want to
-        # inspect error responses rather than having the client raise:
+    async with Client(app, raise_on_error=False) as client:
+        # raise_on_error=False: client returns error results instead of raising
         result = await client.call_tool("ping", {})
         assert not result.is_error  # snake_case, not isError
         data = json.loads(result.content[0].text)
 ```
 
 Key patterns:
-- **`@pytest.mark.anyio`** — marks the test as async; requires `anyio` in test deps and `anyio_mode = "auto"` in `pyproject.toml` (or explicit `pytest_plugins = ["anyio"]`)
+- **`@pytest.mark.anyio`** — marks the test as async; requires `pytest-anyio` in test deps (already in `pyproject.toml`). Works alongside `asyncio_mode = "strict"` (pytest-asyncio setting) — no extra anyio config needed.
 - **`fastmcp.Client(app)`** — takes the FastAPI `app` directly, no server needed
 - **`result.is_error`** — snake_case attribute (not `isError`)
 - **`raise_on_error=False`** on client constructor — keeps error-path tests from raising; inspect `result.is_error` instead

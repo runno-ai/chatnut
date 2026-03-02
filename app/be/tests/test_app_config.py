@@ -75,8 +75,8 @@ def test_static_dir_monkeypatch_affects_serve_spa(tmp_path, monkeypatch):
     """Monkeypatching STATIC_DIR at module level redirects serve_spa() to a custom dir.
 
     Also verifies that symlink-based path traversal protection still applies with
-    a custom STATIC_DIR — a symlink inside the static dir that escapes to /etc is
-    rejected with 404, consistent with the is_relative_to() guard in serve_spa().
+    a custom STATIC_DIR — a symlink inside the static dir that escapes to an
+    external directory is rejected with 404, consistent with the is_relative_to() guard.
     """
     import agents_chat_mcp.app as app_module
 
