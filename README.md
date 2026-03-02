@@ -34,7 +34,7 @@ Tools and routes never touch the DB directly. All business logic lives in `ChatS
 ## Installation
 
 ```bash
-pip install agent-chat-mcp
+pip install agentchat-mcp
 uv run uvicorn agent_chat_mcp.app:app --port 8000
 ```
 

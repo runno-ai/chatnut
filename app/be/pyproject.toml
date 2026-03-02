@@ -1,5 +1,5 @@
 [project]
-name = "agent-chat-mcp"
+name = "agentchat-mcp"
 version = "0.2.0"
 description = "MCP server for agent team chatrooms with SQLite backend"
 authors = [
