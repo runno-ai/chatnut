@@ -4,6 +4,7 @@
 import asyncio
 import logging
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
@@ -60,7 +61,7 @@ async def _auto_archive_loop() -> None:
 
 
 @asynccontextmanager
-async def app_lifespan(app):
+async def app_lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Ensure service is initialized at startup
     _get_service()
     mcp_module.set_event_loop(asyncio.get_running_loop())

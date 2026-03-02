@@ -532,3 +532,21 @@ def test_db_delete_room_transactional(db):
     # Messages should be gone
     msgs, _ = get_messages(db, room.id)
     assert len(msgs) == 0
+
+
+def test_db_path_returns_string(db):
+    """ChatService.db_path() returns a string (empty for :memory:, path for file DBs)."""
+    from agents_chat_mcp.service import ChatService
+    svc = ChatService(db)
+    path = svc.db_path()
+    assert path == ""
+
+
+def test_search_rejects_empty_query(db):
+    """ChatService.search() raises ValueError for empty or whitespace-only queries."""
+    from agents_chat_mcp.service import ChatService
+    svc = ChatService(db)
+    with pytest.raises(ValueError, match="query"):
+        svc.search("")
+    with pytest.raises(ValueError, match="query"):
+        svc.search("   ")

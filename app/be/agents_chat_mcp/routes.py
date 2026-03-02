@@ -4,11 +4,14 @@
 import anyio
 import hashlib
 import json
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
+
+from agents_chat_mcp.service import ChatService
 
 
 POLL_INTERVAL = 0.5
@@ -20,10 +23,10 @@ KEEPALIVE_INTERVAL = 15  # seconds between keepalive comments
 
 
 async def message_event_generator(
-    svc,
+    svc: ChatService,
     room_id: str,
     last_id: int = 0,
-    is_disconnected=None,
+    is_disconnected: Callable[[], Awaitable[bool]] | None = None,
 ) -> AsyncIterator[dict]:
     """Async generator for SSE message events.
 
@@ -60,11 +63,11 @@ async def message_event_generator(
 
 
 async def chatroom_event_generator(
-    svc,
+    svc: ChatService,
     project: str | None = None,
     branch: str | None = None,
     reader: str | None = None,
-    is_disconnected=None,
+    is_disconnected: Callable[[], Awaitable[bool]] | None = None,
 ) -> AsyncIterator[dict]:
     """Async generator for SSE chatroom list events.
 
@@ -123,7 +126,7 @@ class MarkReadRequest(BaseModel):
     last_read_message_id: int
 
 
-def create_router(get_service) -> APIRouter:
+def create_router(get_service: Callable[[], ChatService]) -> APIRouter:
     """Create API router with the provided service factory."""
     router = APIRouter(prefix="/api")
 
@@ -177,7 +180,10 @@ def create_router(get_service) -> APIRouter:
 
     @router.get("/search")
     def search(q: str, project: str | None = None):
-        return get_service().search(q, project=project)
+        try:
+            return get_service().search(q, project=project)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
 
     @router.get("/stream/chatrooms")
     async def stream_chatrooms(

@@ -194,16 +194,19 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on push to `main` and `test`, a
 
 ## CD
 
-`.github/workflows/cd.yml` triggers on push to `test` (pre-release) and `main` (stable):
+`.github/workflows/cd.yml` triggers on **CI completion** (`workflow_run` after the CI workflow passes on `test` or `main`), plus `workflow_dispatch` for manual runs. It does NOT trigger directly on push.
 
-- **test branch push** → publishes `{version}rc{run_number}` pre-release to PyPI + GitHub pre-release
-- **main branch push** → publishes `{version}` stable to PyPI + tags `v{version}` + GitHub Release
+- **test branch** → publishes `{version}rc{run_number}` pre-release to PyPI; creates `v{version}rc{run_number}` tag + GitHub pre-release
+- **main branch** → publishes `{version}` stable to PyPI; creates `v{version}` tag + GitHub stable release
+
+Both branches create tags and GitHub Releases — the difference is the `--prerelease` flag on test branch releases.
 
 Uses PyPI OIDC Trusted Publishing (no stored secrets). Requires one-time Trusted Publisher setup — see [RELEASING.md](RELEASING.md).
 
 ## Design Decisions
 
 - **Single FastAPI process** — MCP + REST + SSE + static serving, one language, shared ChatService
+- **MCP tools are write-oriented, REST API is read-oriented** — MCP tools (`post_message`, `init_room`, etc.) are designed for agent writes; REST endpoints (`GET /api/chatrooms`, `GET /api/stream/messages`) are designed for the web UI to read. The frontend does not use MCP tools directly.
 - **MCP HTTP transport** — always-on (web UI needs server running anyway)
 - **UUID room PK** — same room name allowed across projects via `UNIQUE(project, name)`
 - **SQLite WAL mode** — concurrent reads (SSE polling) don't block MCP writes
@@ -214,3 +217,38 @@ Uses PyPI OIDC Trusted Publishing (no stored secrets). Requires one-time Trusted
 - **`since_id` for incremental reads** — agents poll with last-seen message ID
 - **Read cursors for unread tracking** — `(room_id, reader)` PK, forward-only via `MAX()` in UPSERT, `ON DELETE CASCADE` for cleanup
 - **`wait_for_messages` for agent blocking** — asyncio.Queue per waiter; `post_message` notifies via `call_soon_threadsafe(_wake_all)` (all `_waiters` access event-loop-only); zero DB reads while waiting; agents call once instead of polling in a loop; timeout capped at 60s
+
+## E2E Testing Patterns
+
+MCP E2E tests (`tests/test_mcp_e2e.py`) run the full FastAPI + FastMCP stack in-process using `anyio` and `fastmcp.Client`.
+
+```python
+import anyio
+import pytest
+from fastmcp import Client
+
+@pytest.mark.anyio
+async def test_something():
+    from agents_chat_mcp.app import app
+
+    async with Client(app, raise_on_error=False) as client:
+        # raise_on_error=False: client returns error results instead of raising
+        result = await client.call_tool("ping", {})
+        assert not result.is_error  # snake_case, not isError
+        data = json.loads(result.content[0].text)
+```
+
+Key patterns:
+- **`@pytest.mark.anyio`** — marks the test as async; requires `pytest-anyio` in test deps (already in `pyproject.toml`). Works alongside `asyncio_mode = "strict"` (pytest-asyncio setting) — no extra anyio config needed.
+- **`fastmcp.Client(app)`** — takes the FastAPI `app` directly, no server needed
+- **`result.is_error`** — snake_case attribute (not `isError`)
+- **`raise_on_error=False`** on client constructor — keeps error-path tests from raising; inspect `result.is_error` instead
+- **`result.content[0].text`** — MCP response content is a list of `TextContent` objects
+- **Helper pattern** — define a `call()` helper to reduce boilerplate:
+
+  ```python
+  async def call(client, tool: str, args: dict | None = None) -> dict:
+      result = await client.call_tool(tool, args or {})
+      assert result.content, f"Tool {tool!r} returned empty content"
+      return json.loads(result.content[0].text)
+  ```
