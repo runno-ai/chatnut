@@ -1,8 +1,17 @@
 import { useState } from "react";
 import type { VersionStatus } from "../types";
 
+const DISMISS_KEY_PREFIX = "tc:update-dismissed:";
+
 export function UpdateBanner({ info }: { info: VersionStatus }) {
-  const [dismissed, setDismissed] = useState(false);
+  const storageKey = `${DISMISS_KEY_PREFIX}${info.latest}`;
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(storageKey) === "1";
+    } catch {
+      return false;
+    }
+  });
 
   if (!info.update_available || dismissed) return null;
 
@@ -19,7 +28,10 @@ export function UpdateBanner({ info }: { info: VersionStatus }) {
         to update
       </span>
       <button
-        onClick={() => setDismissed(true)}
+        onClick={() => {
+          setDismissed(true);
+          try { localStorage.setItem(storageKey, "1"); } catch {}
+        }}
         className="text-amber-400 hover:text-amber-200 ml-4 text-lg leading-none"
         aria-label="Dismiss update notification"
       >
