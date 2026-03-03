@@ -204,7 +204,7 @@ CREATE TABLE IF NOT EXISTS read_cursors (
 
 ## CI
 
-GitHub Actions (`.github/workflows/ci.yml`) runs on push to `main` and `test`, and on PRs targeting either:
+GitHub Actions (`.github/workflows/ci.yml`) runs on push to `main` and on PRs targeting `main`:
 
 | Job | Steps |
 |-----|-------|
@@ -213,14 +213,13 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on push to `main` and `test`, a
 
 ## CD
 
-`.github/workflows/cd.yml` triggers on **CI completion** (`workflow_run` after the CI workflow passes on `test` or `main`), plus `workflow_dispatch` for manual runs. It does NOT trigger directly on push.
+`.github/workflows/cd.yml` is triggered **only via `workflow_dispatch`** — either by the `/deployment` skill or manually via `gh workflow run cd.yml --ref main`.
 
-- **test branch** → publishes `{version}rc{run_number}` pre-release to PyPI; creates `v{version}rc{run_number}` tag + GitHub pre-release
-- **main branch** → publishes `{version}` stable to PyPI; creates `v{version}` tag + GitHub stable release
+- Builds frontend, bundles into Python wheel
+- Publishes to PyPI via OIDC Trusted Publishing
+- Creates git tag + GitHub Release with auto-generated notes
 
-Both branches create tags and GitHub Releases — the difference is the `--prerelease` flag on test branch releases.
-
-Uses PyPI OIDC Trusted Publishing (no stored secrets). Requires one-time Trusted Publisher setup — see [RELEASING.md](RELEASING.md).
+Uses PyPI OIDC Trusted Publishing (no stored secrets). See [RELEASING.md](RELEASING.md).
 
 ## Design Decisions
 
