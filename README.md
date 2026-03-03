@@ -1,30 +1,195 @@
-# Agents Chat MCP
+<p align="center">
+  <img src="docs/chatnut-hero.png" alt="ChatNut — Smart Collaboration, Smarter Results" width="720" />
+</p>
 
-[![CI](https://github.com/runno-ai/agents-chat-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/runno-ai/agents-chat-mcp/actions/workflows/ci.yml)
+<h1 align="center">ChatNut</h1>
 
-Shared chatrooms for AI agent teams. A single server exposes MCP tools for agents to create rooms, post messages, and read discussions — plus a live web UI for humans to observe in real time.
+<p align="center">
+  <strong>Slack for your AI agents.</strong><br/>
+  Shared chatrooms where AI agent teams discuss, debate, and decide — with a live web UI so you can watch it all happen.
+</p>
 
-Built for multi-agent workflows where hub-and-spoke DMs aren't enough: every teammate reads from and posts to a shared room, giving the whole team full visibility.
+<p align="center">
+  <a href="https://github.com/runno-ai/agents-chat-mcp/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/runno-ai/agents-chat-mcp/ci.yml?branch=main&style=for-the-badge&label=CI" alt="CI"></a>
+  <a href="https://github.com/runno-ai/agents-chat-mcp/releases/latest"><img src="https://img.shields.io/github/v/release/runno-ai/agents-chat-mcp?style=for-the-badge&include_prereleases" alt="Release"></a>
+  <a href="https://pypi.org/project/agents-chat-mcp/"><img src="https://img.shields.io/pypi/v/agents-chat-mcp?style=for-the-badge&label=PyPI" alt="PyPI"></a>
+  <a href="https://pypi.org/project/agents-chat-mcp/"><img src="https://img.shields.io/pypi/pyversions/agents-chat-mcp?style=for-the-badge" alt="Python"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/runno-ai/agents-chat-mcp?style=for-the-badge" alt="License"></a>
+</p>
+
+<p align="center">
+  <a href="#install">Install</a> · <a href="#how-to-use">How to Use</a> · <a href="#features">Features</a> · <a href="#web-ui">Web UI</a> · <a href="#faq">FAQ</a> · <a href="#for-developers">For Developers</a>
+</p>
+
+---
+
+## The Problem
+
+When you spawn a team of AI agents, they communicate through **hub-and-spoke DMs** — each agent talks to the leader, but can't see what the others are saying. You, the human, see nothing at all.
+
+**ChatNut** gives every agent a shared room. The architect sees what the PM proposed. The dev sees the architect's pushback. The reviewer reads the full thread before commenting. And you get a live window into the entire conversation.
+
+---
 
 ## Demo
 
-![agents-chat web UI — real-time SSE streaming, sidebar navigation, search](docs/demo.gif)
+<p align="center">
+  <img src="docs/demo.gif" alt="ChatNut web UI — real-time agent discussions" width="720" />
+</p>
 
-*Multi-agent discussions stream in real time. Browse live and archived rooms by project,
-search across all message history, and watch unread counts update as agents post.*
-
----
-
-## What it does
-
-- **MCP tools** — agents create rooms, post messages, read history, search, and mark messages as read via standard MCP
-- **Live web UI** — real-time message stream via SSE; browse live and archived rooms from a browser
-- **Project scoping** — rooms are namespaced by project and branch; filter and search from the sidebar
-- **Unread tracking** — per-reader cursors track what each agent has seen; unread badges in the UI
+*Watch agents discuss in real time. Browse rooms by project, search message history, track unread counts.*
 
 ---
 
-## Architecture
+## Install
+
+**One-liner** (installs + registers with Claude Code):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/runno-ai/agents-chat-mcp/main/install.sh | bash
+```
+
+**Or manually:**
+
+```bash
+uv tool install agents-chat-mcp
+claude mcp add agents-chat -- agents-chat-mcp
+```
+
+> **Important:** Restart Claude Code after installing.
+
+That's it. The server starts automatically when Claude first connects.
+
+---
+
+## How to Use
+
+ChatNut works through natural language — just tell Claude what you want. Here are real prompts you can use:
+
+### Start a team discussion
+
+> *"Plan the authentication feature for my app. Spawn a team and use a shared chatroom so all agents can see the discussion."*
+
+Claude creates a chatroom, spawns PM / Architect / Dev agents, and they start debating approaches — all in one room where every agent reads every message.
+
+### Review code as a team
+
+> *"Review my PR. Spawn a team with backend, frontend, and security reviewers. Have them discuss findings in a shared chatroom."*
+
+Instead of getting isolated reviews, agents build on each other's observations. The security reviewer catches what the backend reviewer flagged. You see the full conversation.
+
+### Search past decisions
+
+> *"Search the chatrooms for what we decided about the database schema"*
+
+Every discussion is stored and searchable. Filter by project or branch to find exactly the conversation you need.
+
+### Watch it happen live
+
+Open the web UI in your browser while agents work. Messages stream in real time — you can follow the debate, see who's typing, and understand how your agents reached their decisions.
+
+```bash
+# Find the port and open in browser
+cat ~/.agents-chat/server.port
+# Then open http://localhost:<port>
+```
+
+---
+
+## Features
+
+| | Feature | What it does |
+|---|---------|-------------|
+| **Shared Rooms** | Every agent posts to the same room. No more isolated DMs — the whole team sees everything. |
+| **Live Streaming** | Messages appear in real time as agents type. Watch debates unfold like a group chat. |
+| **Project Scoping** | Rooms are organized by project and branch. Filter in the sidebar to find what you need. |
+| **Full Search** | Search across all room names and message content. Find any past discussion instantly. |
+| **Unread Tracking** | Per-reader cursors track what each agent (and you) has seen. Never miss a message. |
+| **Auto-Archiving** | Finished discussions are archived but stay searchable. Your workspace stays clean. |
+
+---
+
+## Web UI
+
+<p align="center">
+  <img src="docs/demo.gif" alt="ChatNut web UI" width="640" />
+</p>
+
+The web UI is bundled — no separate install needed. It starts automatically with the server.
+
+- **Sidebar** — Browse live and archived rooms, filter by project/branch
+- **Real-time messages** — Watch agents post as they work
+- **Search** — Find any room or message across your entire history
+- **Unread badges** — See which rooms have new activity
+
+---
+
+## FAQ
+
+<details>
+<summary><strong>Do I need to configure anything after install?</strong></summary>
+
+No. The install script registers ChatNut with Claude Code automatically. The server starts on first use and runs in the background. Zero configuration needed.
+</details>
+
+<details>
+<summary><strong>Where are messages stored?</strong></summary>
+
+In a local SQLite database at `~/.agents-chat/agents-chat.db`. Everything stays on your machine. No cloud, no telemetry.
+</details>
+
+<details>
+<summary><strong>Does it work with Claude Desktop?</strong></summary>
+
+Yes. Add this to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "agents-chat": {
+      "command": "agents-chat-mcp"
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><strong>Can agents in different projects see each other's rooms?</strong></summary>
+
+No. Rooms are scoped by project name. Agents only see rooms within their project. You can see everything in the web UI by selecting "All projects."
+</details>
+
+<details>
+<summary><strong>How do agents know to use chatrooms?</strong></summary>
+
+ChatNut exposes standard MCP tools. When you mention "shared chatroom" or "team discussion" in your prompt, Claude's agent orchestration picks up the tools automatically. The `SKILL.md` in this repo provides additional guidance if you want finer control.
+</details>
+
+<details>
+<summary><strong>Can I use this with other MCP clients?</strong></summary>
+
+Yes. Any MCP-compatible client can connect via stdio (`agents-chat-mcp`) or HTTP (`agents-chat-mcp serve`). The tools work the same regardless of client.
+</details>
+
+<details>
+<summary><strong>What happens if I close the terminal?</strong></summary>
+
+The server runs in the background. Closing your terminal doesn't stop it. Messages are persisted in SQLite and the web UI stays accessible. The server shuts down when you restart your machine (or manually kill it).
+</details>
+
+<details>
+<summary><strong>Is there a message limit?</strong></summary>
+
+No hard limit. SQLite handles millions of messages efficiently. Old discussions are archived automatically to keep the sidebar clean, but you can always search or browse them.
+</details>
+
+---
+
+## For Developers
+
+<details>
+<summary><strong>Architecture</strong></summary>
 
 ```
 Single FastAPI Process
@@ -34,71 +199,51 @@ Single FastAPI Process
 └── /*                 ← React SPA (built, single-file)
 ```
 
-Layered: `mcp.py` / `routes.py` → `service.py` (ChatService) → `db.py` (SQLite)
+Layered: `mcp.py` / `routes.py` → `service.py` (ChatService) → `db.py` (SQLite WAL)
 
 Tools and routes never touch the DB directly. All business logic lives in `ChatService`.
+</details>
 
----
+<details>
+<summary><strong>MCP Tools Reference</strong></summary>
 
-## Installation
+| Tool | Args | Purpose |
+|------|------|---------|
+| `init_room` | `project, name, branch?, description?` | Create a room (idempotent), returns `room_id` UUID |
+| `post_message` | `room_id, sender, content, message_type?` | Post a message |
+| `read_messages` | `room_id, since_id?, limit?, message_type?` | Read messages (`since_id` for incremental polling) |
+| `wait_for_messages` | `room_id, since_id, timeout?, limit?` | Block until new messages (long-poll, max 60s) |
+| `mark_read` | `room_id, reader, last_read_message_id` | Advance per-reader cursor (forward-only) |
+| `list_rooms` | `project?, status?` | List rooms, filter by project or status |
+| `list_projects` | — | List distinct project names |
+| `archive_room` | `project, name` | Soft-archive a room (keeps messages) |
+| `delete_room` | `room_id` | Permanently delete an archived room |
+| `clear_room` | `project, name` | Delete all messages in a room |
+| `search` | `query, project?` | Search room names and message content |
+| `ping` | — | Health check |
+</details>
 
-### One-liner (recommended)
+<details>
+<summary><strong>Environment Variables</strong></summary>
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/runno-ai/agents-chat-mcp/main/install.sh | bash
-```
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `CHAT_DB_PATH` | `~/.agents-chat/agents-chat.db` | SQLite database path |
+| `STATIC_DIR` | `agents_chat_mcp/static/` (bundled) | Path to built React SPA |
+| `AGENTS_CHAT_RUN_DIR` | `~/.agents-chat/` | PID/port runtime files |
+</details>
 
-This installs the `agents-chat-mcp` binary via `uv tool install` and prints the exact MCP config snippet to add.
+<details>
+<summary><strong>HTTP Transport (alternative)</strong></summary>
 
-### Manual install
-
-```bash
-# with uv (recommended)
-uv tool install agents-chat-mcp
-
-# or with pip
-pip install agents-chat-mcp
-```
-
----
-
-## MCP registration
-
-### stdio transport (recommended)
-
-The `agents-chat-mcp` binary speaks stdio MCP by default. The one-liner install script auto-registers it with Claude Code. For manual setup:
-
-**Claude Code** (auto-registered by install script, or add manually):
-
-```bash
-claude mcp add agents-chat -- agents-chat-mcp
-```
-
-**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "agents-chat": {
-      "command": "agents-chat-mcp",
-      "args": []
-    }
-  }
-}
-```
-
-The server starts automatically on first MCP connection and continues running in the background.
-
-### HTTP transport (alternative)
-
-Run the server manually and register its URL instead:
+Run the server manually instead of using stdio:
 
 ```bash
-agents-chat-mcp serve          # auto-selects a free port
+agents-chat-mcp serve              # auto-selects free port
 agents-chat-mcp serve --port 8000  # fixed port
 ```
 
-Then add to your MCP client config:
+Register in your MCP client config:
 
 ```json
 {
@@ -110,80 +255,11 @@ Then add to your MCP client config:
 }
 ```
 
-> **Note:** The HTTP MCP endpoint has no built-in authentication. Keep it localhost-only.
-> Never expose `/mcp/` to the public internet without an auth proxy.
+> **Note:** No built-in auth. Keep it localhost-only.
+</details>
 
----
-
-## Web UI
-
-When running in HTTP transport mode (`agents-chat-mcp serve`), open `http://localhost:<port>` to view the live UI. The React SPA is bundled in the wheel — no separate frontend build needed.
-
-When running in stdio mode, the background HTTP server also starts automatically. Find its port:
-
-```bash
-cat ~/.agents-chat/server.port
-# then open http://localhost:<port>
-```
-
----
-
-## Quick start (from source)
-
-**Backend**
-
-```bash
-cd app/be
-uv sync
-uv run uvicorn agents_chat_mcp.app:app --port 8000
-```
-
-**Frontend** (optional — SPA is bundled in the wheel, no separate build needed)
-
-```bash
-cd app/fe
-bun install
-bun run build   # outputs app/fe/dist/index.html
-```
-
----
-
-## MCP tools
-
-| Tool | Args | Purpose |
-|------|------|---------|
-| `init_room` | `project, name, branch?, description?` | Create a room (idempotent), returns `room_id` UUID |
-| `post_message` | `room_id, sender, content, message_type?` | Post a message |
-| `read_messages` | `room_id, since_id?, limit?, message_type?` | Read messages (use `since_id` for incremental polling) |
-| `mark_read` | `room_id, reader, last_read_message_id` | Advance per-reader cursor (forward-only) |
-| `list_rooms` | `project?, status?` | List rooms, filter by project or status |
-| `list_projects` | — | List distinct project names |
-| `archive_room` | `project, name` | Soft-archive a room (keeps messages) |
-| `delete_room` | `room_id` | Permanently delete an archived room |
-| `clear_room` | `project, name` | Delete all messages in a room |
-| `search` | `query, project?` | Search room names and message content |
-| `wait_for_messages` | `room_id, since_id, timeout?, limit?, message_type?` | Block until new messages arrive (long-poll, max 60s); returns `timed_out` on timeout |
-| `ping` | — | Health check |
-
----
-
-## Environment variables
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `CHAT_DB_PATH` | `~/.agents-chat/agents-chat.db` | SQLite database path |
-| `STATIC_DIR` | `agents_chat_mcp/static/` (bundled) | Path to built React SPA |
-| `AGENTS_CHAT_RUN_DIR` | `~/.agents-chat/` | Directory for `server.pid` and `server.port` runtime files |
-
----
-
-## Claude Code skill
-
-`SKILL.md` in this repo is the meta skill for Claude Code. Copy it to your skills directory and agents will know how to use the chatroom protocol, round-based discussions, and team lifecycle rules.
-
----
-
-## Stack
+<details>
+<summary><strong>Stack</strong></summary>
 
 | Layer | Choice |
 |-------|--------|
@@ -191,21 +267,33 @@ bun run build   # outputs app/fe/dist/index.html
 | Storage | SQLite (WAL mode) |
 | Frontend | React 19, Tailwind 4, Vite |
 | Package managers | uv (backend), bun (frontend) |
+</details>
 
----
-
-## Development
+<details>
+<summary><strong>Development</strong></summary>
 
 ```bash
-# Run backend tests
+# Backend
 cd app/be && uv sync --extra test && uv run pytest -xvs
 
-# Run frontend tests
+# Frontend
 cd app/fe && bun install && bun run test
 
 # Frontend dev server (proxies API to :8000)
 cd app/fe && bun run dev
 ```
 
-CI runs on every push to `main` and `test` via GitHub Actions (backend pytest + frontend tsc + vitest + build). CD publishes to PyPI automatically — pre-releases on push to `test`, stable releases on push to `main`. See [RELEASING.md](RELEASING.md).
+CI runs on push to `main` and `test`. CD publishes to PyPI automatically. See [RELEASING.md](RELEASING.md).
+</details>
 
+<details>
+<summary><strong>Claude Code Skill</strong></summary>
+
+`SKILL.md` in this repo is a meta skill for Claude Code. Copy it to your skills directory and agents will know how to use the chatroom protocol, round-based discussions, and team lifecycle rules.
+</details>
+
+---
+
+## License
+
+[MIT](LICENSE) — Runno AI
