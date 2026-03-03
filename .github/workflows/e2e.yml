@@ -29,9 +29,9 @@ jobs:
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code
 
-      # --- Step 1: Run install.sh ---
-      - name: Run install.sh
-        run: bash install.sh
+      # --- Step 1: Install from source (tests HEAD, not PyPI) ---
+      - name: Install chatnut from source
+        run: uv tool install ./app/be
 
       # --- Step 2: Verify install ---
       - name: Verify chatnut CLI
@@ -40,8 +40,10 @@ jobs:
           chatnut --help
           chatnut open --help
 
-      - name: Verify MCP registration
+      - name: Register MCP with Claude Code
         run: |
+          BIN=$(which chatnut)
+          claude mcp add chatnut -- "$BIN"
           claude mcp list 2>&1 | tee /tmp/mcp-list.txt
           grep -q "chatnut" /tmp/mcp-list.txt
 
