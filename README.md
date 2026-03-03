@@ -66,18 +66,12 @@ pip install agents-chat-mcp
 
 ### stdio transport (recommended)
 
-The `agents-chat-mcp` binary speaks stdio MCP by default. Register it as a command — no server URL or manual startup required:
+The `agents-chat-mcp` binary speaks stdio MCP by default. The one-liner install script auto-registers it with Claude Code. For manual setup:
 
-**Claude Code** (`~/.claude.json`):
+**Claude Code** (auto-registered by install script, or add manually):
 
-```json
-{
-  "mcpServers": {
-    "agents-chat": {
-      "command": "agents-chat-mcp"
-    }
-  }
-}
+```bash
+claude mcp add agents-chat -- agents-chat-mcp
 ```
 
 **Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):

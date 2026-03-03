@@ -27,24 +27,43 @@ fi
 
 echo ""
 echo "Installed successfully!"
-echo ""
-echo "Add to your Claude Code MCP config (~/.claude.json):"
-echo ""
-echo '  "agents-chat": {'
-echo "    \"command\": \"$BIN\""
-echo '  }'
-echo ""
+
+# 4. Auto-register with Claude Code (if available)
+if command -v claude &>/dev/null; then
+    echo ""
+    echo "Registering with Claude Code..."
+    if claude mcp add agents-chat -- "$BIN" 2>/dev/null; then
+        echo "  ✓ Registered as 'agents-chat' MCP server"
+    else
+        echo "  ⚠ Auto-registration failed. Add manually to ~/.claude.json:"
+        echo ""
+        echo '    "agents-chat": {'
+        echo "      \"command\": \"$BIN\""
+        echo '    }'
+    fi
+else
+    echo ""
+    echo "Claude Code not found. Add manually to ~/.claude.json:"
+    echo ""
+    echo '  "agents-chat": {'
+    echo "    \"command\": \"$BIN\""
+    echo '  }'
+fi
+
+# 5. Print Claude Desktop instructions (requires manual config)
 if [[ "$(uname)" == "Darwin" ]]; then
     DESKTOP_CONFIG="~/Library/Application Support/Claude/claude_desktop_config.json"
 else
     DESKTOP_CONFIG="~/.config/claude/claude_desktop_config.json"
 fi
-echo "Or for Claude Desktop ($DESKTOP_CONFIG):"
+echo ""
+echo "For Claude Desktop, add to $DESKTOP_CONFIG:"
 echo ""
 echo '  "agents-chat": {'
 echo "    \"command\": \"$BIN\","
 echo '    "args": []'
 echo '  }'
+
 echo ""
 echo "The server starts automatically on first MCP connection."
 echo "Web UI available at the port shown in ~/.agents-chat/server.port"
