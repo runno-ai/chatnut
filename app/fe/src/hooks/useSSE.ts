@@ -13,9 +13,16 @@ export function useSSE(roomId: string | null) {
 
   // Batch incoming messages with requestAnimationFrame
   const pendingRef = useRef<ChatMessage[]>([]);
-  const rafScheduledRef = useRef(false);
+  const rafIdRef = useRef<number | null>(null);
 
   useEffect(() => {
+    // Reset batch state from any previous room/connection
+    pendingRef.current = [];
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+
     if (!roomId) {
       setMessages([]);
       setConnectionStatus("disconnected");
@@ -25,6 +32,16 @@ export function useSSE(roomId: string | null) {
     let closed = false;
     setMessages([]);
     setConnectionStatus("connecting");
+
+    function flushPending() {
+      rafIdRef.current = null;
+      if (closed) return;
+      const batch = pendingRef.current;
+      pendingRef.current = [];
+      if (batch.length > 0) {
+        setMessages((prev) => [...prev, ...batch]);
+      }
+    }
 
     function connect() {
       if (closed) return;
@@ -42,14 +59,8 @@ export function useSSE(roomId: string | null) {
         try {
           const msg = JSON.parse(event.data) as ChatMessage;
           pendingRef.current.push(msg);
-          if (!rafScheduledRef.current) {
-            rafScheduledRef.current = true;
-            requestAnimationFrame(() => {
-              const batch = pendingRef.current;
-              pendingRef.current = [];
-              rafScheduledRef.current = false;
-              setMessages((prev) => [...prev, ...batch]);
-            });
+          if (rafIdRef.current === null) {
+            rafIdRef.current = requestAnimationFrame(flushPending);
           }
         } catch {
           console.warn("useSSE: failed to parse message JSON");
@@ -57,7 +68,7 @@ export function useSSE(roomId: string | null) {
       };
 
       es.addEventListener("reset", () => {
-        setMessages([]);
+        if (!closed) setMessages([]);
       });
 
       es.onerror = () => {
@@ -80,6 +91,11 @@ export function useSSE(roomId: string | null) {
       esRef.current = null;
       if (retryRef.current) clearTimeout(retryRef.current);
       retryRef.current = null;
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      pendingRef.current = [];
       setConnectionStatus("disconnected");
     };
   }, [roomId]);

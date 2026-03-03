@@ -89,12 +89,20 @@ export default function App() {
     document.addEventListener("mouseup", onUp);
   }, []);
 
-  // Active rooms are live-streamable via SSE, archived are static
+  // Active rooms are live-streamable via SSE, archived are static.
+  // While chatrooms are still loading, default to live (SSE) to avoid
+  // a false→true flip that clears messages mid-delivery.
   const activeIds = useMemo(
     () => new Set(active.map((r) => r.id)),
     [active]
   );
-  const isLive = selectedRoom ? activeIds.has(selectedRoom) : false;
+  const archivedIds = useMemo(
+    () => new Set(archived.map((r) => r.id)),
+    [archived]
+  );
+  const isLive = selectedRoom
+    ? loading ? !archivedIds.has(selectedRoom) : activeIds.has(selectedRoom)
+    : false;
 
   const handleDeleteRoom = useCallback(async (roomId: string) => {
     try {
