@@ -9,7 +9,7 @@ Agents Chat MCP — unified FastAPI server for agent team chatrooms. Serves MCP 
 | Component | Choice |
 |-----------|--------|
 | Language | Python 3.12 |
-| MCP framework | fastmcp 3.x (HTTP transport, mounted in FastAPI) |
+| MCP framework | fastmcp 3.x (stdio + HTTP transport, mounted in FastAPI) |
 | Web framework | FastAPI + sse-starlette |
 | Storage | SQLite with WAL mode (path from `CHAT_DB_PATH` env var) |
 | Frontend | React 19, Tailwind 4, Vite (single-file build) |
@@ -23,6 +23,7 @@ app/
     agents_chat_mcp/
       __init__.py
       app.py             # FastAPI app — mounts MCP + routes + static serving
+      cli.py             # CLI entry point (stdio proxy + serve subcommand)
       mcp.py             # FastMCP tool definitions (thin wrappers over ChatService)
       service.py         # ChatService class — all business logic
       db.py              # SQLite schema, queries (UUID rooms, project scoping)
@@ -34,6 +35,7 @@ app/
       test_service.py
       test_mcp.py
       test_routes.py
+      test_cli.py
       test_integration.py
     pyproject.toml
     .python-version
@@ -63,8 +65,14 @@ cd app/be && uv sync --extra test
 # Run all backend tests
 cd app/be && uv run pytest -xvs
 
-# Start unified server (MCP + REST + SSE + static)
-cd app/be && uv run uvicorn agents_chat_mcp.app:app --port 8000
+# Start server (auto-selects free port, writes PID/port to ~/.agents-chat/)
+agents-chat-mcp serve
+
+# Start server on a specific port
+agents-chat-mcp serve --port 8000
+
+# Run as stdio MCP proxy (auto-starts server if needed)
+agents-chat-mcp
 
 # Frontend setup
 cd app/fe && bun install
@@ -85,15 +93,26 @@ cd app/fe && bun run test
 |----------|---------|---------|
 | `CHAT_DB_PATH` | SQLite database file path | `~/.agents-chat/agents-chat.db` |
 | `STATIC_DIR` | Path to built React SPA | `agents_chat_mcp/static/` (bundled in wheel) |
+| `AGENTS_CHAT_RUN_DIR` | Runtime dir for PID/port files | `~/.agents-chat/` |
 
 ## MCP Registration
 
-HTTP transport — register the URL (server must be running):
+stdio transport (recommended) — server starts automatically:
 
 ```json
 {
   "agents-chat": {
-    "url": "http://localhost:8000/mcp/"
+    "command": "agents-chat-mcp"
+  }
+}
+```
+
+HTTP transport (alternative) — requires manually running `agents-chat-mcp serve`:
+
+```json
+{
+  "agents-chat": {
+    "url": "http://localhost:<port>/mcp/"
   }
 }
 ```
@@ -207,7 +226,8 @@ Uses PyPI OIDC Trusted Publishing (no stored secrets). Requires one-time Trusted
 
 - **Single FastAPI process** — MCP + REST + SSE + static serving, one language, shared ChatService
 - **MCP tools are write-oriented, REST API is read-oriented** — MCP tools (`post_message`, `init_room`, etc.) are designed for agent writes; REST endpoints (`GET /api/chatrooms`, `GET /api/stream/messages`) are designed for the web UI to read. The frontend does not use MCP tools directly.
-- **MCP HTTP transport** — always-on (web UI needs server running anyway)
+- **MCP stdio transport (default)** — CLI auto-starts HTTP server on first connection, proxies via FastMCP ProxyProvider; PID/port files at `~/.agents-chat/` for server discovery
+- **MCP HTTP transport (alternative)** — direct HTTP registration when server is already running
 - **UUID room PK** — same room name allowed across projects via `UNIQUE(project, name)`
 - **SQLite WAL mode** — concurrent reads (SSE polling) don't block MCP writes
 - **SSE for push** — unidirectional, auto-reconnect, Last-Event-Id for resume

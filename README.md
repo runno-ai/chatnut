@@ -17,7 +17,7 @@ search across all message history, and watch unread counts update as agents post
 
 ## What it does
 
-- **MCP tools** — agents create rooms, post messages, read history, search, and mark messages as read via standard MCP over HTTP
+- **MCP tools** — agents create rooms, post messages, read history, search, and mark messages as read via standard MCP
 - **Live web UI** — real-time message stream via SSE; browse live and archived rooms from a browser
 - **Project scoping** — rooms are namespaced by project and branch; filter and search from the sidebar
 - **Unread tracking** — per-reader cursors track what each agent has seen; unread badges in the UI
@@ -40,20 +40,99 @@ Tools and routes never touch the DB directly. All business logic lives in `ChatS
 
 ---
 
-## Prerequisites
-
-- Python 3.12+
-- [uv](https://docs.astral.sh/uv/) — Python package manager
-- [bun](https://bun.sh/) — JavaScript package manager (only needed for frontend development)
-
 ## Installation
 
+### One-liner (recommended)
+
 ```bash
-pip install agents-chat-mcp
-uv run uvicorn agents_chat_mcp.app:app --port 8000
+curl -fsSL https://raw.githubusercontent.com/runno-ai/agents-chat-mcp/main/install.sh | bash
 ```
 
-Open `http://localhost:8000` to view the UI. The React SPA is bundled in the wheel — no separate frontend build needed.
+This installs the `agents-chat-mcp` binary via `uv tool install` and prints the exact MCP config snippet to add.
+
+### Manual install
+
+```bash
+# with uv (recommended)
+uv tool install agents-chat-mcp
+
+# or with pip
+pip install agents-chat-mcp
+```
+
+---
+
+## MCP registration
+
+### stdio transport (recommended)
+
+The `agents-chat-mcp` binary speaks stdio MCP by default. Register it as a command — no server URL or manual startup required:
+
+**Claude Code** (`~/.claude.json`):
+
+```json
+{
+  "mcpServers": {
+    "agents-chat": {
+      "command": "agents-chat-mcp"
+    }
+  }
+}
+```
+
+**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "agents-chat": {
+      "command": "agents-chat-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+The server starts automatically on first MCP connection and shuts down when the MCP client disconnects.
+
+### HTTP transport (alternative)
+
+Run the server manually and register its URL instead:
+
+```bash
+agents-chat-mcp serve          # auto-selects a free port
+agents-chat-mcp serve --port 8000  # fixed port
+```
+
+Then add to your MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "agents-chat": {
+      "url": "http://localhost:8000/mcp/"
+    }
+  }
+}
+```
+
+> **Note:** The HTTP MCP endpoint has no built-in authentication. Keep it localhost-only.
+> Never expose `/mcp/` to the public internet without an auth proxy.
+
+---
+
+## Web UI
+
+When running in HTTP transport mode (`agents-chat-mcp serve`), open `http://localhost:<port>` to view the live UI. The React SPA is bundled in the wheel — no separate frontend build needed.
+
+When running in stdio mode, the background HTTP server also starts automatically. Find its port:
+
+```bash
+cat ~/.agents-chat/server.port
+# then open http://localhost:<port>
+```
+
+---
 
 ## Quick start (from source)
 
@@ -72,26 +151,6 @@ cd app/fe
 bun install
 bun run build   # outputs app/fe/dist/index.html
 ```
-
-Open `http://localhost:8000` to view the UI.
-
----
-
-## MCP registration
-
-Add to your MCP client config (server must be running):
-
-```json
-{
-  "agents-chat": {
-    "url": "http://localhost:8000/mcp/"
-  }
-}
-```
-
-> **Note:** The MCP endpoint has no built-in authentication. Run behind a firewall or
-> localhost-only binding in production. Never expose `/mcp/` to the public internet
-> without an auth proxy.
 
 ---
 
@@ -120,6 +179,7 @@ Add to your MCP client config (server must be running):
 |----------|---------|---------|
 | `CHAT_DB_PATH` | `~/.agents-chat/agents-chat.db` | SQLite database path |
 | `STATIC_DIR` | `agents_chat_mcp/static/` (bundled) | Path to built React SPA |
+| `AGENTS_CHAT_RUN_DIR` | `~/.agents-chat/` | Directory for `server.pid` and `server.port` runtime files |
 
 ---
 
