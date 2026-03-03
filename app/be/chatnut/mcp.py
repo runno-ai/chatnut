@@ -8,6 +8,7 @@ import anyio
 from fastmcp import FastMCP
 
 from chatnut.service import ChatService
+from chatnut.version_check import get_cached_version_info
 
 mcp = FastMCP("agents-chat")
 
@@ -71,8 +72,10 @@ def _notify_waiters(room_id: str) -> None:
 
 @mcp.tool()
 def ping() -> dict:
-    """Health check — returns the database file path and 'ok' status."""
-    return {"db_path": _get_service().db_path(), "status": "ok"}
+    """Health check — returns the database file path, status, and version info."""
+    result = {"db_path": _get_service().db_path(), "status": "ok"}
+    result.update(get_cached_version_info().to_dict())
+    return result
 
 
 @mcp.tool()
