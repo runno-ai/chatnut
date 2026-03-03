@@ -5,6 +5,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
@@ -132,3 +133,96 @@ class TestHelpers:
         monkeypatch.setenv("AGENTS_CHAT_RUN_DIR", str(tmp_path))
         from agents_chat_mcp.cli import _get_run_dir
         assert _get_run_dir() == tmp_path
+
+
+class TestEnsureServer:
+    """Test _ensure_server auto-start logic."""
+
+    def test_ensure_server_returns_url_when_running(self, tmp_path, monkeypatch):
+        """_ensure_server returns URL immediately if server is already running."""
+        monkeypatch.setenv("AGENTS_CHAT_RUN_DIR", str(tmp_path))
+        (tmp_path / "server.port").write_text("5555")
+        (tmp_path / "server.pid").write_text(str(os.getpid()))
+
+        from agents_chat_mcp.cli import _ensure_server
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+
+        with patch("agents_chat_mcp.cli.httpx.get", return_value=mock_resp):
+            url = _ensure_server()
+
+        assert url == "http://127.0.0.1:5555"
+
+    def test_ensure_server_starts_server_when_not_running(self, tmp_path, monkeypatch):
+        """_ensure_server spawns a background server and waits for port file."""
+        monkeypatch.setenv("AGENTS_CHAT_RUN_DIR", str(tmp_path))
+
+        from agents_chat_mcp.cli import _ensure_server
+
+        mock_popen = MagicMock()
+        call_count = 0
+
+        def fake_get(url, timeout=None):
+            nonlocal call_count
+            call_count += 1
+            if "/api/status" in url:
+                if "5555" in url:
+                    resp = MagicMock()
+                    resp.status_code = 200
+                    return resp
+                # _is_server_running check — no port file yet
+                raise httpx.ConnectError("refused")
+            raise httpx.ConnectError("refused")
+
+        def fake_popen(*args, **kwargs):
+            # Simulate server writing port file after Popen
+            (tmp_path / "server.port").write_text("5555")
+            return mock_popen
+
+        with patch("agents_chat_mcp.cli.subprocess.Popen", side_effect=fake_popen) as popen_mock, \
+             patch("agents_chat_mcp.cli.httpx.get", side_effect=fake_get), \
+             patch("agents_chat_mcp.cli.time.sleep"):
+            url = _ensure_server()
+
+        assert url == "http://127.0.0.1:5555"
+        popen_mock.assert_called_once()
+        # Verify log file was created
+        assert (tmp_path / "server.log").exists()
+
+    def test_ensure_server_creates_run_dir(self, tmp_path, monkeypatch):
+        """_ensure_server creates the run directory if it doesn't exist."""
+        run_dir = tmp_path / "subdir" / "nested"
+        monkeypatch.setenv("AGENTS_CHAT_RUN_DIR", str(run_dir))
+
+        from agents_chat_mcp.cli import _ensure_server
+
+        def fake_popen(*args, **kwargs):
+            (run_dir / "server.port").write_text("6666")
+            return MagicMock()
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+
+        with patch("agents_chat_mcp.cli.subprocess.Popen", side_effect=fake_popen), \
+             patch("agents_chat_mcp.cli.httpx.get", side_effect=[
+                 httpx.ConnectError("refused"),  # _is_server_running
+                 mock_resp,  # health check after port file appears
+             ]), \
+             patch("agents_chat_mcp.cli.time.sleep"):
+            url = _ensure_server()
+
+        assert url == "http://127.0.0.1:6666"
+        assert run_dir.exists()
+
+    def test_ensure_server_raises_on_timeout(self, tmp_path, monkeypatch):
+        """_ensure_server raises RuntimeError if server doesn't start."""
+        monkeypatch.setenv("AGENTS_CHAT_RUN_DIR", str(tmp_path))
+
+        from agents_chat_mcp.cli import _ensure_server
+
+        with patch("agents_chat_mcp.cli.subprocess.Popen", return_value=MagicMock()), \
+             patch("agents_chat_mcp.cli.httpx.get", side_effect=httpx.ConnectError("refused")), \
+             patch("agents_chat_mcp.cli.time.sleep"):
+            with pytest.raises(RuntimeError, match="Failed to start"):
+                _ensure_server()

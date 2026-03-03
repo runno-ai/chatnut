@@ -118,6 +118,9 @@ def _ensure_server() -> str:
         if url:
             return url
 
+    run_dir = _get_run_dir()
+    run_dir.mkdir(parents=True, exist_ok=True)
+
     # Redirect server output to a log file for debugging
     log_file = run_dir / "server.log"
     log_fh = open(log_file, "a")  # noqa: SIM115
@@ -127,8 +130,8 @@ def _ensure_server() -> str:
         stderr=log_fh,
         start_new_session=True,
     )
+    log_fh.close()
 
-    run_dir = _get_run_dir()
     port_file = run_dir / "server.port"
     for _ in range(20):
         time.sleep(0.5)

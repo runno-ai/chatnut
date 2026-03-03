@@ -93,7 +93,7 @@ The `agents-chat-mcp` binary speaks stdio MCP by default. Register it as a comma
 }
 ```
 
-The server starts automatically on first MCP connection and shuts down when the MCP client disconnects.
+The server starts automatically on first MCP connection and continues running in the background.
 
 ### HTTP transport (alternative)
 

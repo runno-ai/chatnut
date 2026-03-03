@@ -48,11 +48,14 @@ Replace `${ROOM_ID}` with the `id` returned by `init_room`. The port file (`~/.a
 If any `mcp__agents-chat__*` tool call fails with a connection or session error:
 
 1. **Check server health:**
+
    ```bash
    PORT=$(cat ~/.agents-chat/server.port 2>/dev/null || echo "8000")
    curl -s "http://127.0.0.1:${PORT}/api/status"
    ```
+
 2. **If unreachable, restart the server:**
+
    ```bash
    # Graceful stop (if PID file exists):
    kill -TERM $(cat ~/.agents-chat/server.pid 2>/dev/null) 2>/dev/null || true
