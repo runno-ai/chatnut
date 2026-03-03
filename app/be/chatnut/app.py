@@ -24,6 +24,7 @@ from chatnut.service import ChatService
 from chatnut import mcp as mcp_module
 from chatnut.mcp import mcp
 from chatnut.routes import create_router
+from chatnut.version_check import get_version_info
 
 
 def _default_static_dir() -> str:
@@ -60,16 +61,39 @@ async def _auto_archive_loop() -> None:
             logger.exception("Auto-archive failed")
 
 
+async def _version_check_loop() -> None:
+    """Periodically check for updates and log warnings."""
+    while True:
+        try:
+            info = await get_version_info()
+            if info.update_available:
+                logger.warning(
+                    "Update available: chatnut %s (you have %s). "
+                    "Run: uv tool upgrade chatnut",
+                    info.latest,
+                    info.current,
+                )
+        except Exception:
+            logger.debug("Version check failed", exc_info=True)
+        await asyncio.sleep(3600)
+
+
 @asynccontextmanager
 async def app_lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Ensure service is initialized at startup
     _get_service()
     mcp_module.set_event_loop(asyncio.get_running_loop())
-    task = asyncio.create_task(_auto_archive_loop())
+    archive_task = asyncio.create_task(_auto_archive_loop())
+    version_task = asyncio.create_task(_version_check_loop())
     yield
-    task.cancel()
+    archive_task.cancel()
+    version_task.cancel()
     try:
-        await task
+        await archive_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await version_task
     except asyncio.CancelledError:
         pass
     mcp_module.set_event_loop(None)  # Clear stale reference; _notify_waiters guards against closed loop

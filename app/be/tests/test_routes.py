@@ -464,3 +464,33 @@ async def test_chatroom_sse_includes_unread_count(db):
     assert len(active) == 1
     assert active[0]["unreadCount"] == 2  # web-user hasn't read anything
     await gen.aclose()
+
+
+def test_status_includes_version(client):
+    from unittest.mock import patch
+    from chatnut.version_check import VersionInfo
+
+    with patch(
+        "chatnut.routes.get_cached_version_info",
+        return_value=VersionInfo(current="0.2.0", latest="0.3.0"),
+    ):
+        resp = client.get("/api/status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["version"] == "0.2.0"
+    assert data["latest"] == "0.3.0"
+    assert data["update_available"] is True
+
+
+def test_status_no_update(client):
+    from unittest.mock import patch
+    from chatnut.version_check import VersionInfo
+
+    with patch(
+        "chatnut.routes.get_cached_version_info",
+        return_value=VersionInfo(current="0.3.0", latest="0.3.0"),
+    ):
+        resp = client.get("/api/status")
+    data = resp.json()
+    assert data["version"] == "0.3.0"
+    assert "latest" not in data

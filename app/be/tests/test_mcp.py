@@ -61,3 +61,47 @@ def test_search_route_returns_422_for_empty_query(db):
 
     resp = client.get("/api/search", params={"q": "   "})
     assert resp.status_code == 422
+
+
+def test_ping_includes_version(db):
+    from unittest.mock import patch
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+    from chatnut.version_check import VersionInfo
+
+    svc = ChatService(db)
+    original = mcp_module._service_factory
+    mcp_module.set_service_factory(lambda: svc)
+    try:
+        with patch(
+            "chatnut.mcp.get_cached_version_info",
+            return_value=VersionInfo(current="0.2.0", latest="0.3.0"),
+        ):
+            result = mcp_module.ping()
+        assert result["version"] == "0.2.0"
+        assert result["latest"] == "0.3.0"
+        assert result["update_available"] is True
+    finally:
+        mcp_module.set_service_factory(original)
+
+
+def test_ping_version_no_update(db):
+    from unittest.mock import patch
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+    from chatnut.version_check import VersionInfo
+
+    svc = ChatService(db)
+    original = mcp_module._service_factory
+    mcp_module.set_service_factory(lambda: svc)
+    try:
+        with patch(
+            "chatnut.mcp.get_cached_version_info",
+            return_value=VersionInfo(current="0.3.0", latest="0.3.0"),
+        ):
+            result = mcp_module.ping()
+        assert result["version"] == "0.3.0"
+        assert "latest" not in result
+        assert "update_available" not in result
+    finally:
+        mcp_module.set_service_factory(original)

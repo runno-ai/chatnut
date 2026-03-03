@@ -332,6 +332,21 @@ async def test_e2e_wait_for_messages_early_exit(mcp_svc):
     assert result["messages"][0]["content"] == "second"
 
 
+@pytest.mark.anyio
+async def test_e2e_ping_includes_version(mcp_svc):
+    from unittest.mock import patch
+    from chatnut.version_check import VersionInfo
+
+    with patch(
+        "chatnut.mcp.get_cached_version_info",
+        return_value=VersionInfo(current="0.1.0", latest=None),
+    ):
+        async with Client(mcp_module.mcp) as client:
+            data = await call(client, "ping")
+    assert data["status"] == "ok"
+    assert "version" in data
+
+
 # --- Error path tests (raise_on_error=False to inspect is_error) ---
 
 @pytest.mark.anyio

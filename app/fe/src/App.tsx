@@ -5,6 +5,8 @@ import { ChatView } from "./components/ChatView";
 import { useChatrooms } from "./hooks/useChatrooms";
 import { useProjects } from "./hooks/useProjects";
 import { useSearch } from "./hooks/useSearch";
+import { useVersion } from "./hooks/useVersion";
+import { UpdateBanner } from "./components/UpdateBanner";
 
 const READER_STORAGE_KEY = "tc:reader-id";
 let volatileReaderId: string | null = null;
@@ -48,6 +50,7 @@ export default function App() {
     readerId
   );
   const projects = useProjects();
+  const versionInfo = useVersion();
 
   // Derive branches from unfiltered rooms (before branch filter)
   const branches = [...new Set([...active, ...archived].map((r) => r.branch).filter(Boolean))] as string[];
@@ -122,7 +125,9 @@ export default function App() {
   }, [selectedRoom]);
 
   return (
-    <div className="flex h-screen bg-gray-950 text-gray-100 overflow-hidden">
+    <div className="flex flex-col h-screen bg-gray-950 text-gray-100 overflow-hidden">
+      {versionInfo?.update_available && <UpdateBanner info={versionInfo} />}
+      <div className="flex flex-1 overflow-hidden">
       <Sidebar
         active={filteredActive}
         archived={filteredArchived}
@@ -167,6 +172,7 @@ export default function App() {
           setSelectedBranch(b); ssSet(SS_BRANCH, b);
         }}
       />
+      </div>
     </div>
   );
 }

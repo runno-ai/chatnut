@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from chatnut.service import ChatService
+from chatnut.version_check import get_cached_version_info
 
 
 POLL_INTERVAL = 0.5
@@ -132,7 +133,9 @@ def create_router(get_service: Callable[[], ChatService]) -> APIRouter:
 
     @router.get("/status")
     def status():
-        return {"status": "ok"}
+        result = {"status": "ok"}
+        result.update(get_cached_version_info().to_dict())
+        return result
 
     @router.get("/projects")
     def projects():
