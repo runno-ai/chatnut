@@ -1,7 +1,7 @@
 [project]
-name = "agents-chat-mcp"
-version = "0.2.0"
-description = "MCP server for agent team chatrooms with SQLite backend"
+name = "chatnut"
+version = "0.3.0"
+description = "ChatNut — shared chatrooms for AI agent teams"
 authors = [
     { name = "Runno AI", email = "hi@runno.dev" },
 ]
@@ -27,11 +27,11 @@ classifiers = [
 ]
 
 [project.scripts]
-agents-chat-mcp = "agents_chat_mcp.cli:main"
+chatnut = "chatnut.cli:main"
 
 [project.urls]
-Repository = "https://github.com/runno-ai/agents-chat-mcp"
-Homepage = "https://github.com/runno-ai/agents-chat-mcp"
+Repository = "https://github.com/runno-ai/chatnut"
+Homepage = "https://github.com/runno-ai/chatnut"
 
 [project.optional-dependencies]
 test = [

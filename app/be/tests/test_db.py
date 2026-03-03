@@ -2,7 +2,7 @@
 
 import sqlite3
 import pytest
-from agents_chat_mcp.db import (
+from chatnut.db import (
     init_db,
     create_room,
     get_room,
@@ -420,7 +420,7 @@ def test_get_unread_counts_empty_list(db):
 
 def test_delete_read_cursors(db):
     """delete_read_cursors removes all cursors for a room."""
-    from agents_chat_mcp.db import delete_read_cursors
+    from chatnut.db import delete_read_cursors
     room = create_room(db, project="proj", name="dev")
     msg = insert_message(db, room.id, "alice", "hello")
     upsert_read_cursor(db, room.id, "bob", msg.id)

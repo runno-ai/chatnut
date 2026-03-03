@@ -17,8 +17,8 @@ import json
 import pytest
 from fastmcp import Client
 
-from agents_chat_mcp import mcp as mcp_module
-from agents_chat_mcp.service import ChatService
+from chatnut import mcp as mcp_module
+from chatnut.service import ChatService
 
 
 @pytest.fixture

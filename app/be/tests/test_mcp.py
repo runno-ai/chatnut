@@ -2,7 +2,7 @@
 
 import pytest
 
-from agents_chat_mcp.mcp import mcp
+from chatnut.mcp import mcp
 
 
 @pytest.mark.anyio
@@ -21,7 +21,7 @@ async def test_all_tools_registered():
 @pytest.mark.anyio
 async def test_mark_read_tool_registered():
     """Verify mark_read is in the tool list."""
-    from agents_chat_mcp.mcp import mcp
+    from chatnut.mcp import mcp
     tools = await mcp.list_tools()
     tool_names = [t.name for t in tools]
     assert "mark_read" in tool_names
@@ -29,8 +29,8 @@ async def test_mark_read_tool_registered():
 
 def test_ping_uses_live_service_path(db):
     """ping() returns the live service db_path, not the module-level DB_PATH constant."""
-    from agents_chat_mcp import mcp as mcp_module
-    from agents_chat_mcp.service import ChatService
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
 
     svc = ChatService(db)
     original_factory = mcp_module._service_factory
@@ -47,8 +47,8 @@ def test_search_route_returns_422_for_empty_query(db):
     """GET /api/search?q= should return 422 for empty query."""
     from fastapi.testclient import TestClient
     from fastapi import FastAPI
-    from agents_chat_mcp.routes import create_router
-    from agents_chat_mcp.service import ChatService
+    from chatnut.routes import create_router
+    from chatnut.service import ChatService
 
     svc = ChatService(db)
     test_app = FastAPI()

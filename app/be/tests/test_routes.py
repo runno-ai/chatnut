@@ -6,8 +6,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from agents_chat_mcp.service import ChatService
-from agents_chat_mcp.routes import create_router, chatroom_event_generator
+from chatnut.service import ChatService
+from chatnut.routes import create_router, chatroom_event_generator
 
 
 @pytest.fixture
@@ -153,7 +153,7 @@ async def test_stream_messages_initial_history(db):
     Directly invokes the extracted async generator to avoid ASGI test client
     SSE buffering issues (TestClient blocks on infinite SSE streams).
     """
-    from agents_chat_mcp.routes import message_event_generator
+    from chatnut.routes import message_event_generator
 
     svc = ChatService(db)
     svc.init_room("proj", "dev")
@@ -195,7 +195,7 @@ async def test_stream_messages_last_event_id(db):
     When last_id > 0, the generator skips initial history and only
     sends messages after the given ID (simulating Last-Event-Id header).
     """
-    from agents_chat_mcp.routes import message_event_generator
+    from chatnut.routes import message_event_generator
 
     svc = ChatService(db)
     svc.init_room("proj", "dev")
@@ -232,7 +232,7 @@ async def test_stream_messages_last_event_id(db):
 @pytest.mark.anyio
 async def test_chatroom_event_generator_initial_emission(db):
     """Test SSE chatroom generator emits room data with stats on first iteration."""
-    from agents_chat_mcp.routes import chatroom_event_generator
+    from chatnut.routes import chatroom_event_generator
 
     svc = ChatService(db)
     svc.init_room("proj", "dev")
@@ -271,7 +271,7 @@ async def test_chatroom_event_generator_initial_emission(db):
 @pytest.mark.anyio
 async def test_chatroom_event_generator_no_reemit_unchanged(db):
     """Test SSE chatroom generator does not re-emit when data is unchanged (hash dedup)."""
-    from agents_chat_mcp.routes import chatroom_event_generator
+    from chatnut.routes import chatroom_event_generator
 
     svc = ChatService(db)
     svc.init_room("proj", "dev")
@@ -368,7 +368,7 @@ async def test_stream_messages_non_integer_last_event_id(db):
     the same logic the route uses: parse the header, fall back to 0 on failure,
     then verify the generator works correctly with last_id=0.
     """
-    from agents_chat_mcp.routes import message_event_generator
+    from chatnut.routes import message_event_generator
 
     svc = ChatService(db)
     svc.init_room("proj", "dev")

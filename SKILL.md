@@ -1,16 +1,16 @@
 ---
-name: agents-chat
-title: agents-chat
+name: chatnut
+title: chatnut
 description: Use when spawning agent teams that need shared discussion visibility beyond hub-and-spoke DMs
-aliases: [agents-chat]
+aliases: [chatnut]
 ---
 
 
 # Team Chat
 
-Shared chatroom for agent teams backed by the agents-chat-mcp server (FastAPI + SQLite). All teammates read from and post to a shared room via MCP tools, giving everyone full visibility into the discussion. Includes a live web UI with SSE streaming for real-time observation.
+Shared chatroom for agent teams backed by the chatnut server (FastAPI + SQLite). All teammates read from and post to a shared room via MCP tools, giving everyone full visibility into the discussion. Includes a live web UI with SSE streaming for real-time observation.
 
-**Storage:** SQLite database at `~/.agents-chat/agents-chat.db` (WAL mode). Safe from Claude Code's `TeamDelete`.
+**Storage:** SQLite database at `~/.chatnut/chatnut.db` (WAL mode). Safe from Claude Code's `TeamDelete`.
 
 **Server:** Always running at your configured URL. MCP endpoint at `/mcp/`.
 
@@ -37,20 +37,20 @@ To view the web UI: open your server URL in a browser.
 After `init_room`, open the browser directly to the new chatroom:
 
 ```bash
-PORT=$(cat ~/.agents-chat/server.port 2>/dev/null || echo "8000")
+PORT=$(cat ~/.chatnut/server.port 2>/dev/null || echo "8000")
 open "http://127.0.0.1:${PORT}/?room=${ROOM_ID}"
 ```
 
-Replace `${ROOM_ID}` with the `id` returned by `init_room`. The port file (`~/.agents-chat/server.port`) is written by the server on startup; the fallback of `8000` applies when the file is absent (e.g., custom installs).
+Replace `${ROOM_ID}` with the `id` returned by `init_room`. The port file (`~/.chatnut/server.port`) is written by the server on startup; the fallback of `8000` applies when the file is absent (e.g., custom installs).
 
 ## Server Recovery
 
-If any `mcp__agents-chat__*` tool call fails with a connection or session error:
+If any `mcp__chatnut__*` tool call fails with a connection or session error:
 
 1. **Check server health:**
 
    ```bash
-   PORT=$(cat ~/.agents-chat/server.port 2>/dev/null || echo "8000")
+   PORT=$(cat ~/.chatnut/server.port 2>/dev/null || echo "8000")
    curl -s "http://127.0.0.1:${PORT}/api/status"
    ```
 
@@ -58,9 +58,9 @@ If any `mcp__agents-chat__*` tool call fails with a connection or session error:
 
    ```bash
    # Graceful stop (if PID file exists):
-   kill -TERM $(cat ~/.agents-chat/server.pid 2>/dev/null) 2>/dev/null || true
+   kill -TERM $(cat ~/.chatnut/server.pid 2>/dev/null) 2>/dev/null || true
    # Start in background:
-   agents-chat-mcp serve &
+   chatnut serve &
    ```
 3. **Wait up to 10s for the health check to pass** — poll `/api/status` until it returns `200`.
 4. **Retry the failed tool call once.**
@@ -158,7 +158,7 @@ You may be woken up multiple times:
 - **Round 3:** Resolve remaining disagreements
 
 ### MCP Fallback
-If `mcp__agents-chat__*` tools are unavailable (tool call fails, tool not in your list, server error):
+If `mcp__chatnut__*` tools are unavailable (tool call fails, tool not in your list, server error):
 - **Do NOT silently drop your findings**
 - Send your full content to the team leader via SendMessage:
 
@@ -173,13 +173,13 @@ A live web UI is running — the PM observes all messages in real-time.
 
 ## MCP Fallback (SendMessage)
 
-If `mcp__agents-chat__*` tools are **unavailable** — server down, tool not in the teammate's tool list, or any tool error — fall back to `SendMessage` directed at the **team leader**.
+If `mcp__chatnut__*` tools are **unavailable** — server down, tool not in the teammate's tool list, or any tool error — fall back to `SendMessage` directed at the **team leader**.
 
 ### Detection
 
 A teammate should switch to fallback mode when:
-- Any `mcp__agents-chat__*` call returns an error or is not available
-- The `mcp__agents-chat__ping` health check fails
+- Any `mcp__chatnut__*` call returns an error or is not available
+- The `mcp__chatnut__ping` health check fails
 - The tool is simply absent from the teammate's tool list
 
 ### Fallback Behavior (Teammate)
@@ -250,7 +250,7 @@ The server runs persistently at your configured URL. Features:
 
 ## Storage
 
-**Prod DB:** `~/.agents-chat/agents-chat.db` — always-on service, never modified by `ss`.
+**Prod DB:** `~/.chatnut/chatnut.db` — always-on service, never modified by `ss`.
 
 **Dev DB:** `data/dev.db` — committed demo fixture, served by `agents-chat-dev` (start via `ss → agents-chat → DEV`).
 - Seed/reset: `cd app/be && uv run python ../../data/seed.py --reset`

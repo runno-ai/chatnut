@@ -1,4 +1,4 @@
-# agents_chat_mcp/routes.py
+# chatnut/routes.py
 """REST + SSE endpoints for the web UI."""
 
 import anyio
@@ -11,7 +11,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-from agents_chat_mcp.service import ChatService
+from chatnut.service import ChatService
 
 
 POLL_INTERVAL = 0.5

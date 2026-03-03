@@ -1,4 +1,4 @@
-"""Tests for the migration runner (agents_chat_mcp.migrate)."""
+"""Tests for the migration runner (chatnut.migrate)."""
 
 import sqlite3
 import textwrap
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from agents_chat_mcp.migrate import run_migrations, _split_statements
+from chatnut.migrate import run_migrations, _split_statements
 
 
 # ---------------------------------------------------------------------------

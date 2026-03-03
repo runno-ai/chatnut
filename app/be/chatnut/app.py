@@ -1,4 +1,4 @@
-# agents_chat_mcp/app.py
+# chatnut/app.py
 """FastAPI application — mounts MCP + REST/SSE routes + static file serving."""
 
 import asyncio
@@ -18,12 +18,12 @@ logger = logging.getLogger(__name__)
 AUTO_ARCHIVE_INTERVAL = 300  # check every 5 minutes
 AUTO_ARCHIVE_INACTIVE_SECONDS = 7200  # archive after 2 hours of inactivity
 
-from agents_chat_mcp.config import DB_PATH
-from agents_chat_mcp.db import init_db
-from agents_chat_mcp.service import ChatService
-from agents_chat_mcp import mcp as mcp_module
-from agents_chat_mcp.mcp import mcp
-from agents_chat_mcp.routes import create_router
+from chatnut.config import DB_PATH
+from chatnut.db import init_db
+from chatnut.service import ChatService
+from chatnut import mcp as mcp_module
+from chatnut.mcp import mcp
+from chatnut.routes import create_router
 
 
 def _default_static_dir() -> str:
@@ -76,7 +76,7 @@ async def app_lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title="Agents Chat",
+    title="ChatNut",
     lifespan=combine_lifespans(app_lifespan, mcp_app.lifespan),
 )
 

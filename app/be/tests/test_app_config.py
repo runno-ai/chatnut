@@ -9,12 +9,12 @@ from fastapi.testclient import TestClient
 
 def test_default_static_dir_is_package_relative():
     """_default_static_dir() returns the package-internal static/ path."""
-    import agents_chat_mcp.app as m
+    import chatnut.app as m
 
     result = m._default_static_dir()
     # Assert structural property without reimplementing the function.
-    assert result.endswith(os.path.join("agents_chat_mcp", "static")), (
-        f"Expected path ending in agents_chat_mcp/static, got {result!r}"
+    assert result.endswith(os.path.join("chatnut", "static")), (
+        f"Expected path ending in chatnut/static, got {result!r}"
     )
     # Assert the directory actually exists in the installed package.
     assert Path(result).is_dir(), (
@@ -25,7 +25,7 @@ def test_default_static_dir_is_package_relative():
 
 def test_serve_spa_path_traversal_returns_404(tmp_path, monkeypatch):
     """serve_spa rejects symlink-based path traversal with 404."""
-    import agents_chat_mcp.app as app_module
+    import chatnut.app as app_module
 
     # Point STATIC_DIR at a temp directory with an index.html
     (tmp_path / "index.html").write_text("<html></html>")
@@ -47,7 +47,7 @@ def test_serve_spa_path_traversal_returns_404(tmp_path, monkeypatch):
 
 def test_serve_spa_missing_index_returns_503(tmp_path, monkeypatch):
     """serve_spa returns 503 when index.html is absent from STATIC_DIR."""
-    import agents_chat_mcp.app as app_module
+    import chatnut.app as app_module
 
     # Point STATIC_DIR at an empty temp directory (no index.html)
     monkeypatch.setattr(app_module, "STATIC_DIR", str(tmp_path))
@@ -65,9 +65,9 @@ def test_static_dir_env_var_expression(tmp_path, monkeypatch):
     sentinel = str(tmp_path / "custom-static-dir")
     monkeypatch.setenv("STATIC_DIR", sentinel)
     # Remove cached module so the fresh import picks up the env var.
-    # monkeypatch.delitem restores sys.modules["agents_chat_mcp.app"] after the test.
-    monkeypatch.delitem(sys.modules, "agents_chat_mcp.app", raising=False)
-    app_module = importlib.import_module("agents_chat_mcp.app")
+    # monkeypatch.delitem restores sys.modules["chatnut.app"] after the test.
+    monkeypatch.delitem(sys.modules, "chatnut.app", raising=False)
+    app_module = importlib.import_module("chatnut.app")
     assert app_module.STATIC_DIR == sentinel
 
 
@@ -78,7 +78,7 @@ def test_static_dir_monkeypatch_affects_serve_spa(tmp_path, monkeypatch):
     a custom STATIC_DIR — a symlink inside the static dir that escapes to an
     external directory is rejected with 404, consistent with the is_relative_to() guard.
     """
-    import agents_chat_mcp.app as app_module
+    import chatnut.app as app_module
 
     # Create a custom static dir with a test file and index.html
     custom_file = tmp_path / "custom.js"

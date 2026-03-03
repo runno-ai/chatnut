@@ -5,9 +5,9 @@ import asyncio
 import anyio
 import pytest
 
-from agents_chat_mcp import mcp as mcp_module
-from agents_chat_mcp.mcp import MAX_WAITERS_PER_ROOM, _notify_waiters, _waiters, wait_for_messages
-from agents_chat_mcp.service import ChatService
+from chatnut import mcp as mcp_module
+from chatnut.mcp import MAX_WAITERS_PER_ROOM, _notify_waiters, _waiters, wait_for_messages
+from chatnut.service import ChatService
 
 
 # wait_for_messages uses asyncio.Queue and call_soon_threadsafe — asyncio only.

@@ -3,7 +3,7 @@
 from datetime import datetime, timezone, timedelta
 
 import pytest
-from agents_chat_mcp.service import ChatService
+from chatnut.service import ChatService
 
 
 def test_init_room(db):
@@ -518,7 +518,7 @@ def test_get_unread_counts_no_reader(db):
 
 def test_db_delete_room_transactional(db):
     """L1: db.delete_room deletes messages and room in one transaction."""
-    from agents_chat_mcp.db import create_room, insert_message, delete_room, get_room_by_id, get_messages
+    from chatnut.db import create_room, insert_message, delete_room, get_room_by_id, get_messages
     room = create_room(db, project="proj", name="to-delete")
     insert_message(db, room.id, "alice", "msg1")
     insert_message(db, room.id, "bob", "msg2")
@@ -536,7 +536,7 @@ def test_db_delete_room_transactional(db):
 
 def test_db_path_returns_string(db):
     """ChatService.db_path() returns a string (empty for :memory:, path for file DBs)."""
-    from agents_chat_mcp.service import ChatService
+    from chatnut.service import ChatService
     svc = ChatService(db)
     path = svc.db_path()
     assert path == ""
@@ -544,7 +544,7 @@ def test_db_path_returns_string(db):
 
 def test_search_rejects_empty_query(db):
     """ChatService.search() raises ValueError for empty or whitespace-only queries."""
-    from agents_chat_mcp.service import ChatService
+    from chatnut.service import ChatService
     svc = ChatService(db)
     with pytest.raises(ValueError, match="query"):
         svc.search("")

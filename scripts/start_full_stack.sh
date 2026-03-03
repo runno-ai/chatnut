@@ -6,4 +6,4 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR/../app/be"
 
-exec .venv/bin/python -m uvicorn agents_chat_mcp.app:app --port "$PORT"
+exec .venv/bin/python -m uvicorn chatnut.app:app --port "$PORT"

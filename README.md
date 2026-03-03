@@ -10,10 +10,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/runno-ai/agents-chat-mcp/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-passing-brightgreen?style=for-the-badge" alt="CI"></a>
-  <a href="https://github.com/runno-ai/agents-chat-mcp/releases/latest"><img src="https://img.shields.io/badge/release-v0.2.0-blue?style=for-the-badge" alt="Release"></a>
-  <a href="https://pypi.org/project/agents-chat-mcp/"><img src="https://img.shields.io/pypi/v/agents-chat-mcp?style=for-the-badge&label=PyPI" alt="PyPI"></a>
-  <a href="https://pypi.org/project/agents-chat-mcp/"><img src="https://img.shields.io/pypi/pyversions/agents-chat-mcp?style=for-the-badge" alt="Python"></a>
+  <a href="https://github.com/runno-ai/chatnut/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-passing-brightgreen?style=for-the-badge" alt="CI"></a>
+  <a href="https://github.com/runno-ai/chatnut/releases/latest"><img src="https://img.shields.io/badge/release-v0.2.0-blue?style=for-the-badge" alt="Release"></a>
+  <a href="https://pypi.org/project/chatnut/"><img src="https://img.shields.io/pypi/v/chatnut?style=for-the-badge&label=PyPI" alt="PyPI"></a>
+  <a href="https://pypi.org/project/chatnut/"><img src="https://img.shields.io/pypi/pyversions/chatnut?style=for-the-badge" alt="Python"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License"></a>
 </p>
 
@@ -46,14 +46,14 @@ When you spawn a team of AI agents, they communicate through **hub-and-spoke DMs
 **One-liner** (installs + registers with Claude Code):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/runno-ai/agents-chat-mcp/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/runno-ai/chatnut/main/install.sh | bash
 ```
 
 **Or manually:**
 
 ```bash
-uv tool install agents-chat-mcp
-claude mcp add agents-chat -- agents-chat-mcp
+uv tool install chatnut
+claude mcp add chatnut -- chatnut
 ```
 
 > **Important:** Restart Claude Code after installing.
@@ -90,7 +90,7 @@ Open the web UI in your browser while agents work. Messages stream in real time 
 
 ```bash
 # Find the port and open in browser
-cat ~/.agents-chat/server.port
+cat ~/.chatnut/server.port
 # Then open http://localhost:<port>
 ```
 
@@ -135,7 +135,7 @@ No. The install script registers ChatNut with Claude Code automatically. The ser
 <details>
 <summary><strong>Where are messages stored?</strong></summary>
 
-In a local SQLite database at `~/.agents-chat/agents-chat.db`. Everything stays on your machine. No cloud, no telemetry.
+In a local SQLite database at `~/.chatnut/chatnut.db`. Everything stays on your machine. No cloud, no telemetry.
 </details>
 
 <details>
@@ -146,8 +146,8 @@ Yes. Add this to your Claude Desktop config (`~/Library/Application Support/Clau
 ```json
 {
   "mcpServers": {
-    "agents-chat": {
-      "command": "agents-chat-mcp"
+    "chatnut": {
+      "command": "chatnut"
     }
   }
 }
@@ -169,7 +169,7 @@ ChatNut exposes standard MCP tools. When you mention "shared chatroom" or "team 
 <details>
 <summary><strong>Can I use this with other MCP clients?</strong></summary>
 
-Yes. Any MCP-compatible client can connect via stdio (`agents-chat-mcp`) or HTTP (`agents-chat-mcp serve`). The tools work the same regardless of client.
+Yes. Any MCP-compatible client can connect via stdio (`chatnut`) or HTTP (`chatnut serve`). The tools work the same regardless of client.
 </details>
 
 <details>
@@ -228,9 +228,9 @@ Tools and routes never touch the DB directly. All business logic lives in `ChatS
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `CHAT_DB_PATH` | `~/.agents-chat/agents-chat.db` | SQLite database path |
-| `STATIC_DIR` | `agents_chat_mcp/static/` (bundled) | Path to built React SPA |
-| `AGENTS_CHAT_RUN_DIR` | `~/.agents-chat/` | PID/port runtime files |
+| `CHAT_DB_PATH` | `~/.chatnut/chatnut.db` | SQLite database path |
+| `STATIC_DIR` | `chatnut/static/` (bundled) | Path to built React SPA |
+| `CHATNUT_RUN_DIR` | `~/.chatnut/` | PID/port runtime files |
 </details>
 
 <details>
@@ -239,8 +239,8 @@ Tools and routes never touch the DB directly. All business logic lives in `ChatS
 Run the server manually instead of using stdio:
 
 ```bash
-agents-chat-mcp serve              # auto-selects free port
-agents-chat-mcp serve --port 8000  # fixed port
+chatnut serve              # auto-selects free port
+chatnut serve --port 8000  # fixed port
 ```
 
 Register in your MCP client config:
@@ -248,7 +248,7 @@ Register in your MCP client config:
 ```json
 {
   "mcpServers": {
-    "agents-chat": {
+    "chatnut": {
       "url": "http://localhost:8000/mcp/"
     }
   }

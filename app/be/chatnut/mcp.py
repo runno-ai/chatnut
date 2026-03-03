@@ -7,7 +7,7 @@ from collections.abc import Callable
 import anyio
 from fastmcp import FastMCP
 
-from agents_chat_mcp.service import ChatService
+from chatnut.service import ChatService
 
 mcp = FastMCP("agents-chat")
 

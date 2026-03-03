@@ -17,7 +17,7 @@ import sys
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "app" / "be"))
 
-from agents_chat_mcp.db import init_db  # noqa: E402
+from chatnut.db import init_db  # noqa: E402
 
 DB_PATH = Path(__file__).resolve().parent / "dev.db"
 
@@ -41,7 +41,7 @@ def _room_uuid(project: str, name: str) -> str:
 # ---------------------------------------------------------------------------
 DEMO_DATA = [
     {
-        "project": "agents-chat-mcp",
+        "project": "chatnut",
         "rooms": [
             # ------------------------------------------------------------------
             # Archived planning room — rich multi-round review of SSE perf plan
@@ -301,7 +301,7 @@ Analyzed MCP-5 bugs.
 **ping() stale DB_PATH:**
 ```python
 # mcp.py:9 — import at module load time
-from agents_chat_mcp.config import DB_PATH
+from chatnut.config import DB_PATH
 
 # mcp.py:74
 return {"db_path": DB_PATH, "status": "ok"}
@@ -346,7 +346,7 @@ For E2E, we need to test through the actual MCP HTTP transport at `/mcp/`. Patte
                     ("qa", """\
 **On service override for E2E:**
 Looked at how `app.py` wires the service. `_get_service()` is a module-level `@lru_cache`. Options:
-1. `unittest.mock.patch('agents_chat_mcp.app._get_service', return_value=test_svc)` — works but brittle to refactors
+1. `unittest.mock.patch('chatnut.app._get_service', return_value=test_svc)` — works but brittle to refactors
 2. Expose a `set_service_factory(fn)` hook in app.py (replaces the lru_cache factory) — clean API
 
 Option 2 is cleaner. Adding `set_service_factory()` to app.py for test injection. Then E2E fixture:

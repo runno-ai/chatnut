@@ -1,4 +1,4 @@
-# Contributing to agents-chat-mcp
+# Contributing to chatnut
 
 Thank you for contributing! This guide covers local setup, running tests, and the PR process.
 
@@ -37,11 +37,11 @@ cd app/fe && bun run test
 
 ```bash
 # Production DB
-cd app/be && uv run uvicorn agents_chat_mcp.app:app --port 8000
+cd app/be && uv run uvicorn chatnut.app:app --port 8000
 
 # Dev DB (rich seed data, reseeds on start)
 # Requires: CHAT_DB_PATH=../../data/dev.db
-cd app/be && CHAT_DB_PATH=../../data/dev.db uv run uvicorn agents_chat_mcp.app:app --port 8000
+cd app/be && CHAT_DB_PATH=../../data/dev.db uv run uvicorn chatnut.app:app --port 8000
 ```
 
 Open `http://localhost:8000` to view the UI.

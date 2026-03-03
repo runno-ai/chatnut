@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# install.sh — Install agents-chat-mcp and register with Claude Code
+# install.sh — Install chatnut and register with Claude Code
 set -euo pipefail
 
-echo "Installing agents-chat-mcp..."
+echo "Installing chatnut..."
 
 # 1. Ensure uv is available
 if ! command -v uv &>/dev/null; then
@@ -12,16 +12,16 @@ if ! command -v uv &>/dev/null; then
 fi
 
 # 2. Install the package
-uv tool install agents-chat-mcp
+uv tool install chatnut
 
 # 3. Find the installed binary
-BIN=$(uv tool dir)/agents-chat-mcp/bin/agents-chat-mcp
+BIN=$(uv tool dir)/chatnut/bin/chatnut
 if [[ ! -x "$BIN" ]]; then
-    BIN=$(which agents-chat-mcp 2>/dev/null || echo "")
+    BIN=$(which chatnut 2>/dev/null || echo "")
 fi
 
 if [[ -z "$BIN" ]]; then
-    echo "Error: agents-chat-mcp binary not found after install"
+    echo "Error: chatnut binary not found after install"
     exit 1
 fi
 
@@ -32,12 +32,12 @@ echo "Installed successfully!"
 if command -v claude &>/dev/null; then
     echo ""
     echo "Registering with Claude Code..."
-    if claude mcp add agents-chat -- "$BIN" 2>/dev/null; then
+    if claude mcp add chatnut -- "$BIN" 2>/dev/null; then
         echo "  ✓ Registered as 'agents-chat' MCP server"
     else
         echo "  ⚠ Auto-registration failed. Add manually to ~/.claude.json:"
         echo ""
-        echo '    "agents-chat": {'
+        echo '    "chatnut": {'
         echo "      \"command\": \"$BIN\""
         echo '    }'
     fi
@@ -45,7 +45,7 @@ else
     echo ""
     echo "Claude Code not found. Add manually to ~/.claude.json:"
     echo ""
-    echo '  "agents-chat": {'
+    echo '  "chatnut": {'
     echo "    \"command\": \"$BIN\""
     echo '  }'
 fi
@@ -59,11 +59,11 @@ fi
 echo ""
 echo "For Claude Desktop, add to $DESKTOP_CONFIG:"
 echo ""
-echo '  "agents-chat": {'
+echo '  "chatnut": {'
 echo "    \"command\": \"$BIN\","
 echo '    "args": []'
 echo '  }'
 
 echo ""
 echo "The server starts automatically on first MCP connection."
-echo "Web UI available at the port shown in ~/.agents-chat/server.port"
+echo "Web UI available at the port shown in ~/.chatnut/server.port"

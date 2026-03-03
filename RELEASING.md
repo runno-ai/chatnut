@@ -1,4 +1,4 @@
-# Releasing agents-chat-mcp
+# Releasing chatnut
 
 ## Branching Model
 
@@ -19,10 +19,10 @@ The CD workflow uses OIDC Trusted Publishing — no stored secrets needed.
 
 Configure once in PyPI project settings:
 
-1. Go to https://pypi.org/manage/project/agents-chat-mcp/settings/publishing/
+1. Go to https://pypi.org/manage/project/chatnut/settings/publishing/
 2. Add a new Trusted Publisher with:
    - **Owner:** `runno-ai`
-   - **Repository:** `agents-chat-mcp`
+   - **Repository:** `chatnut`
    - **Workflow filename:** `cd.yml`
    - **Environment:** _(leave blank)_
 3. Save. No GitHub secret needed.
@@ -37,7 +37,7 @@ Configure once in PyPI project settings:
    - Builds and bundles frontend into the wheel
    - Publishes `{version}rc{run_number}` to PyPI (pre-release)
    - Creates GitHub pre-release with auto-generated notes
-4. Verify: `pip install agents-chat-mcp --pre`
+4. Verify: `pip install chatnut --pre`
 
 ### Stable release (merge `test` → `main`)
 
@@ -63,23 +63,23 @@ This ensures the stable release uses the intended version.
 
 ```bash
 # Check PyPI
-pip install agents-chat-mcp==0.3.0
+pip install chatnut==0.3.0
 
 # Check GitHub Releases
-gh release list --repo runno-ai/agents-chat-mcp
+gh release list --repo runno-ai/chatnut
 ```
 
 ## Monitoring Deployments
 
 ```bash
 # Recent CD runs
-gh run list --workflow=cd.yml --repo runno-ai/agents-chat-mcp --limit 5
+gh run list --workflow=cd.yml --repo runno-ai/chatnut --limit 5
 
 # Latest run details
-gh run view --repo runno-ai/agents-chat-mcp
+gh run view --repo runno-ai/chatnut
 
 # Trigger manual CD run (workflow_dispatch)
-gh workflow run cd.yml --repo runno-ai/agents-chat-mcp --ref test
+gh workflow run cd.yml --repo runno-ai/chatnut --ref test
 ```
 
 Or use the `/deployment` Claude skill:

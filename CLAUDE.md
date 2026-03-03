@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Agents Chat MCP — unified FastAPI server for agent team chatrooms. Serves MCP tools (HTTP transport), REST/SSE web API, and a React SPA from a single process. SQLite-backed with project/branch scoping, search, and real-time updates via SSE.
+ChatNut — unified FastAPI server for agent team chatrooms. Serves MCP tools (HTTP transport), REST/SSE web API, and a React SPA from a single process. SQLite-backed with project/branch scoping, search, and real-time updates via SSE.
 
 ## Tech Stack
 
@@ -20,7 +20,7 @@ Agents Chat MCP — unified FastAPI server for agent team chatrooms. Serves MCP 
 ```text
 app/
   be/
-    agents_chat_mcp/
+    chatnut/
       __init__.py
       app.py             # FastAPI app — mounts MCP + routes + static serving
       cli.py             # CLI entry point (stdio proxy + serve subcommand)
@@ -65,14 +65,14 @@ cd app/be && uv sync --extra test
 # Run all backend tests
 cd app/be && uv run pytest -xvs
 
-# Start server (auto-selects free port, writes PID/port to ~/.agents-chat/)
-agents-chat-mcp serve
+# Start server (auto-selects free port, writes PID/port to ~/.chatnut/)
+chatnut serve
 
 # Start server on a specific port
-agents-chat-mcp serve --port 8000
+chatnut serve --port 8000
 
 # Run as stdio MCP proxy (auto-starts server if needed)
-agents-chat-mcp
+chatnut
 
 # Frontend setup
 cd app/fe && bun install
@@ -91,9 +91,9 @@ cd app/fe && bun run test
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `CHAT_DB_PATH` | SQLite database file path | `~/.agents-chat/agents-chat.db` |
-| `STATIC_DIR` | Path to built React SPA | `agents_chat_mcp/static/` (bundled in wheel) |
-| `AGENTS_CHAT_RUN_DIR` | Runtime dir for PID/port files | `~/.agents-chat/` |
+| `CHAT_DB_PATH` | SQLite database file path | `~/.chatnut/chatnut.db` |
+| `STATIC_DIR` | Path to built React SPA | `chatnut/static/` (bundled in wheel) |
+| `CHATNUT_RUN_DIR` | Runtime dir for PID/port files | `~/.chatnut/` |
 
 ## MCP Registration
 
@@ -101,17 +101,17 @@ stdio transport (recommended) — server starts automatically:
 
 ```json
 {
-  "agents-chat": {
-    "command": "agents-chat-mcp"
+  "chatnut": {
+    "command": "chatnut"
   }
 }
 ```
 
-HTTP transport (alternative) — requires manually running `agents-chat-mcp serve`:
+HTTP transport (alternative) — requires manually running `chatnut serve`:
 
 ```json
 {
-  "agents-chat": {
+  "chatnut": {
     "url": "http://localhost:<port>/mcp/"
   }
 }
@@ -226,7 +226,7 @@ Uses PyPI OIDC Trusted Publishing (no stored secrets). Requires one-time Trusted
 
 - **Single FastAPI process** — MCP + REST + SSE + static serving, one language, shared ChatService
 - **MCP tools are write-oriented, REST API is read-oriented** — MCP tools (`post_message`, `init_room`, etc.) are designed for agent writes; REST endpoints (`GET /api/chatrooms`, `GET /api/stream/messages`) are designed for the web UI to read. The frontend does not use MCP tools directly.
-- **MCP stdio transport (default)** — CLI auto-starts HTTP server on first connection, proxies via FastMCP ProxyProvider; PID/port files at `~/.agents-chat/` for server discovery
+- **MCP stdio transport (default)** — CLI auto-starts HTTP server on first connection, proxies via FastMCP ProxyProvider; PID/port files at `~/.chatnut/` for server discovery
 - **MCP HTTP transport (alternative)** — direct HTTP registration when server is already running
 - **UUID room PK** — same room name allowed across projects via `UNIQUE(project, name)`
 - **SQLite WAL mode** — concurrent reads (SSE polling) don't block MCP writes
@@ -249,7 +249,7 @@ from fastmcp import Client
 
 @pytest.mark.anyio
 async def test_something():
-    from agents_chat_mcp.app import app
+    from chatnut.app import app
 
     async with Client(app, raise_on_error=False) as client:
         # raise_on_error=False: client returns error results instead of raising

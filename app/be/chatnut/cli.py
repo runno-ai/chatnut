@@ -1,8 +1,8 @@
-"""CLI entry point for agents-chat-mcp.
+"""CLI entry point for chatnut.
 
 Usage:
-    agents-chat-mcp          # stdio mode (default) — proxy to HTTP server
-    agents-chat-mcp serve    # run HTTP server in foreground
+    chatnut          # stdio mode (default) — proxy to HTTP server
+    chatnut serve    # run HTTP server in foreground
 """
 import argparse
 import atexit
@@ -19,7 +19,7 @@ import httpx
 
 def _get_run_dir() -> Path:
     """Return the runtime directory for PID/port files."""
-    return Path(os.environ.get("AGENTS_CHAT_RUN_DIR", Path.home() / ".agents-chat"))
+    return Path(os.environ.get("CHATNUT_RUN_DIR", Path.home() / ".chatnut"))
 
 
 def _find_free_port() -> int:
@@ -66,7 +66,7 @@ def cmd_serve(args: argparse.Namespace) -> None:
                 port_file.write_text(str(port))
 
     config = uvicorn.Config(
-        "agents_chat_mcp.app:app",
+        "chatnut.app:app",
         host="127.0.0.1",
         port=port,
         log_level="info",
@@ -125,7 +125,7 @@ def _ensure_server() -> str:
     log_file = run_dir / "server.log"
     log_fh = open(log_file, "a")  # noqa: SIM115
     subprocess.Popen(
-        [sys.executable, "-m", "agents_chat_mcp.cli", "serve"],
+        [sys.executable, "-m", "chatnut.cli", "serve"],
         stdout=log_fh,
         stderr=log_fh,
         start_new_session=True,
@@ -145,7 +145,7 @@ def _ensure_server() -> str:
                 except Exception:
                     continue
 
-    raise RuntimeError("Failed to start agents-chat-mcp server within 10 seconds")
+    raise RuntimeError("Failed to start chatnut server within 10 seconds")
 
 
 def cmd_stdio(args: argparse.Namespace) -> None:
@@ -165,7 +165,7 @@ def cmd_stdio(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="agents-chat-mcp")
+    parser = argparse.ArgumentParser(prog="chatnut")
     sub = parser.add_subparsers(dest="command")
 
     serve_parser = sub.add_parser("serve", help="Run HTTP server in foreground")

@@ -112,7 +112,7 @@ export function Sidebar({
     <div className="bg-gray-900 border-r border-gray-800 flex flex-col shrink-0" style={{ width }}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-3 border-b border-gray-800">
-        <span className="text-sm font-semibold text-gray-300">Chatrooms</span>
+        <span className="text-sm font-semibold text-gray-300">ChatNut</span>
         <button
           onClick={onToggleCollapse}
           className="text-gray-400 hover:text-gray-200 p-1"

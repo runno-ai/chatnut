@@ -1,6 +1,6 @@
 """Tests for Room and Message dataclasses."""
 
-from agents_chat_mcp.models import Room, Message
+from chatnut.models import Room, Message
 
 
 def test_room_to_dict():
