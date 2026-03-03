@@ -35,3 +35,9 @@ export interface SearchResult {
   rooms: ChatroomInfo[];
   message_rooms: Array<{ room_id: string; match_count: number }>;
 }
+
+export interface VersionStatus {
+  version: string;
+  latest?: string;
+  update_available?: boolean;
+}
