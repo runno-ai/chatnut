@@ -56,6 +56,7 @@ def test_version_info_to_dict_no_latest():
 
 
 def test_get_current_version():
+    _clear_cache()  # also clears lru_cache on get_current_version
     with patch("chatnut.version_check.importlib.metadata.version", return_value="1.2.3"):
         v = get_current_version()
     assert v == "1.2.3"
@@ -63,6 +64,7 @@ def test_get_current_version():
 
 def test_get_current_version_fallback():
     import importlib.metadata
+    _clear_cache()  # also clears lru_cache on get_current_version
     with patch(
         "chatnut.version_check.importlib.metadata.version",
         side_effect=importlib.metadata.PackageNotFoundError("chatnut"),
@@ -165,6 +167,89 @@ async def test_get_version_info_returns_none_latest_on_failure():
             info = await get_version_info()
     assert info.latest is None
     assert info.update_available is False
+
+
+@pytest.mark.anyio
+async def test_get_version_info_returns_stale_on_failure_after_success():
+    """After a successful fetch, if the next fetch fails, stale value is returned."""
+    _clear_cache()
+    with patch("chatnut.version_check.get_current_version", return_value="0.1.0"):
+        # First call succeeds and populates cache
+        with patch(
+            "chatnut.version_check.fetch_latest_version",
+            new_callable=AsyncMock,
+            return_value="0.5.0",
+        ):
+            info1 = await get_version_info()
+        assert info1.latest == "0.5.0"
+
+        # Expire the cache by manipulating the timestamp
+        import chatnut.version_check as vc_mod
+        ts, ver = vc_mod._cache["latest"]
+        vc_mod._cache["latest"] = (ts - CACHE_TTL - 1, ver)
+
+        # Second call fails — should return stale "0.5.0"
+        with patch(
+            "chatnut.version_check.fetch_latest_version",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            info2 = await get_version_info()
+    assert info2.latest == "0.5.0"
+
+
+@pytest.mark.anyio
+async def test_get_version_info_does_not_cache_on_failure():
+    """A failed fetch should not overwrite an existing valid cache entry."""
+    _clear_cache()
+    with patch("chatnut.version_check.get_current_version", return_value="0.1.0"):
+        # Populate cache with a fresh entry
+        with patch(
+            "chatnut.version_check.fetch_latest_version",
+            new_callable=AsyncMock,
+            return_value="0.5.0",
+        ):
+            await get_version_info()
+
+        # Simulate a failed fetch — cache should remain "0.5.0"
+        import chatnut.version_check as vc_mod
+        ts_before = vc_mod._cache["latest"][0]
+
+        with patch(
+            "chatnut.version_check.fetch_latest_version",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            # Still within TTL so cache is returned directly without re-fetching
+            info = await get_version_info()
+        assert info.latest == "0.5.0"
+        # Timestamp unchanged (no write on failure within TTL)
+        assert vc_mod._cache["latest"][0] == ts_before
+
+
+@pytest.mark.anyio
+async def test_get_version_info_ttl_expiry_refetches():
+    """After TTL expires, a new fetch is performed."""
+    _clear_cache()
+    import chatnut.version_check as vc_mod
+
+    with patch("chatnut.version_check.get_current_version", return_value="0.1.0"):
+        with patch(
+            "chatnut.version_check.fetch_latest_version",
+            new_callable=AsyncMock,
+            return_value="0.5.0",
+        ) as mock_fetch:
+            await get_version_info()
+            assert mock_fetch.call_count == 1
+
+            # Advance the cached timestamp past TTL
+            ts, ver = vc_mod._cache["latest"]
+            vc_mod._cache["latest"] = (ts - CACHE_TTL - 1, ver)
+
+            mock_fetch.return_value = "0.6.0"
+            info = await get_version_info()
+            assert mock_fetch.call_count == 2
+        assert info.latest == "0.6.0"
 
 
 def test_get_cached_version_info_empty_cache():

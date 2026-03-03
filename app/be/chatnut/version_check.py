@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import importlib.metadata
 import logging
 import time
@@ -32,6 +33,7 @@ class VersionInfo:
         return d
 
 
+@functools.lru_cache(maxsize=1)
 def get_current_version() -> str:
     try:
         return importlib.metadata.version("chatnut")
@@ -45,6 +47,7 @@ _cache: dict[str, tuple[float, str | None]] = {}
 
 def _clear_cache() -> None:
     _cache.clear()
+    get_current_version.cache_clear()
 
 
 async def fetch_latest_version() -> str | None:
@@ -66,6 +69,7 @@ async def fetch_latest_version() -> str | None:
             tag = data.get("tag_name", "")
             return tag.lstrip("v") if tag else None
     except Exception:
+        logger.debug("Failed to fetch latest version", exc_info=True)
         return None
 
 
@@ -79,8 +83,12 @@ async def get_version_info() -> VersionInfo:
             return VersionInfo(current=current, latest=version)
 
     latest = await fetch_latest_version()
-    _cache["latest"] = (time.monotonic(), latest)
-    return VersionInfo(current=current, latest=latest)
+    if latest is not None:
+        _cache["latest"] = (time.monotonic(), latest)
+        return VersionInfo(current=current, latest=latest)
+    # Fetch failed — return stale cached value if available
+    stale = cached[1] if cached else None
+    return VersionInfo(current=current, latest=stale)
 
 
 def get_cached_version_info() -> VersionInfo:

@@ -61,19 +61,21 @@ async def _auto_archive_loop() -> None:
             logger.exception("Auto-archive failed")
 
 
-async def _check_version_on_startup() -> None:
-    """Background version check — logs warning if update available."""
-    try:
-        info = await get_version_info()
-        if info.update_available:
-            logger.warning(
-                "Update available: chatnut %s (you have %s). "
-                "Run: uv tool upgrade chatnut",
-                info.latest,
-                info.current,
-            )
-    except Exception:
-        pass  # Graceful degradation — never fail startup
+async def _version_check_loop() -> None:
+    """Periodically check for updates and log warnings."""
+    while True:
+        try:
+            info = await get_version_info()
+            if info.update_available:
+                logger.warning(
+                    "Update available: chatnut %s (you have %s). "
+                    "Run: uv tool upgrade chatnut",
+                    info.latest,
+                    info.current,
+                )
+        except Exception:
+            logger.debug("Version check failed", exc_info=True)
+        await asyncio.sleep(3600)
 
 
 @asynccontextmanager
@@ -82,7 +84,7 @@ async def app_lifespan(_app: FastAPI) -> AsyncIterator[None]:
     _get_service()
     mcp_module.set_event_loop(asyncio.get_running_loop())
     archive_task = asyncio.create_task(_auto_archive_loop())
-    version_task = asyncio.create_task(_check_version_on_startup())
+    version_task = asyncio.create_task(_version_check_loop())
     yield
     archive_task.cancel()
     version_task.cancel()

@@ -1,4 +1,5 @@
 # tests/test_app_startup.py
+import asyncio
 import logging
 from unittest.mock import AsyncMock, patch
 
@@ -9,17 +10,23 @@ from chatnut.version_check import VersionInfo
 
 @pytest.mark.anyio
 async def test_startup_logs_update_warning(caplog):
-    """Startup should log a warning when an update is available."""
+    """Version check loop should log a warning when an update is available."""
     mock_info = VersionInfo(current="0.2.0", latest="0.3.0")
     with patch(
         "chatnut.app.get_version_info",
         new_callable=AsyncMock,
         return_value=mock_info,
     ):
-        from chatnut.app import _check_version_on_startup
+        with patch(
+            "chatnut.app.asyncio.sleep",
+            new_callable=AsyncMock,
+            side_effect=asyncio.CancelledError,
+        ):
+            from chatnut.app import _version_check_loop
 
-        with caplog.at_level(logging.WARNING, logger="chatnut.app"):
-            await _check_version_on_startup()
+            with caplog.at_level(logging.WARNING, logger="chatnut.app"):
+                with pytest.raises(asyncio.CancelledError):
+                    await _version_check_loop()
 
     assert any("0.3.0" in r.message and "update" in r.message.lower() for r in caplog.records)
 
@@ -33,10 +40,16 @@ async def test_startup_no_warning_when_current(caplog):
         new_callable=AsyncMock,
         return_value=mock_info,
     ):
-        from chatnut.app import _check_version_on_startup
+        with patch(
+            "chatnut.app.asyncio.sleep",
+            new_callable=AsyncMock,
+            side_effect=asyncio.CancelledError,
+        ):
+            from chatnut.app import _version_check_loop
 
-        with caplog.at_level(logging.WARNING, logger="chatnut.app"):
-            await _check_version_on_startup()
+            with caplog.at_level(logging.WARNING, logger="chatnut.app"):
+                with pytest.raises(asyncio.CancelledError):
+                    await _version_check_loop()
 
     assert not any("update" in r.message.lower() for r in caplog.records)
 
@@ -50,9 +63,15 @@ async def test_startup_silent_on_failure(caplog):
         new_callable=AsyncMock,
         return_value=mock_info,
     ):
-        from chatnut.app import _check_version_on_startup
+        with patch(
+            "chatnut.app.asyncio.sleep",
+            new_callable=AsyncMock,
+            side_effect=asyncio.CancelledError,
+        ):
+            from chatnut.app import _version_check_loop
 
-        with caplog.at_level(logging.WARNING, logger="chatnut.app"):
-            await _check_version_on_startup()
+            with caplog.at_level(logging.WARNING, logger="chatnut.app"):
+                with pytest.raises(asyncio.CancelledError):
+                    await _version_check_loop()
 
     assert not any("update" in r.message.lower() for r in caplog.records)
