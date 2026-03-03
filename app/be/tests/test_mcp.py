@@ -85,6 +85,94 @@ def test_ping_includes_version(db):
         mcp_module.set_service_factory(original)
 
 
+def test_ping_includes_web_url_when_port_file_exists(db, tmp_path, monkeypatch):
+    """ping() includes web_url when server.port file exists."""
+    from unittest.mock import patch
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+    from chatnut.version_check import VersionInfo
+
+    monkeypatch.setenv("CHATNUT_RUN_DIR", str(tmp_path))
+    (tmp_path / "server.port").write_text("9876")
+
+    svc = ChatService(db)
+    original = mcp_module._service_factory
+    mcp_module.set_service_factory(lambda: svc)
+    try:
+        with patch(
+            "chatnut.mcp.get_cached_version_info",
+            return_value=VersionInfo(current="0.2.0", latest=None),
+        ):
+            result = mcp_module.ping()
+        assert result["web_url"] == "http://127.0.0.1:9876"
+    finally:
+        mcp_module.set_service_factory(original)
+
+
+def test_ping_omits_web_url_when_no_port_file(db, tmp_path, monkeypatch):
+    """ping() omits web_url when server.port file is missing."""
+    from unittest.mock import patch
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+    from chatnut.version_check import VersionInfo
+
+    monkeypatch.setenv("CHATNUT_RUN_DIR", str(tmp_path))
+
+    svc = ChatService(db)
+    original = mcp_module._service_factory
+    mcp_module.set_service_factory(lambda: svc)
+    try:
+        with patch(
+            "chatnut.mcp.get_cached_version_info",
+            return_value=VersionInfo(current="0.2.0", latest=None),
+        ):
+            result = mcp_module.ping()
+        assert "web_url" not in result
+    finally:
+        mcp_module.set_service_factory(original)
+
+
+def test_init_room_includes_web_url_and_opens_browser(db, tmp_path, monkeypatch):
+    """init_room() includes web_url and auto-opens browser when port file exists."""
+    from unittest.mock import patch
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+
+    monkeypatch.setenv("CHATNUT_RUN_DIR", str(tmp_path))
+    (tmp_path / "server.port").write_text("4321")
+
+    svc = ChatService(db)
+    original = mcp_module._service_factory
+    mcp_module.set_service_factory(lambda: svc)
+    try:
+        with patch("webbrowser.open") as mock_browser:
+            result = mcp_module.init_room("test-proj", "test-room")
+        assert result["web_url"] == f"http://127.0.0.1:4321/?room={result['id']}"
+        mock_browser.assert_called_once_with(result["web_url"])
+    finally:
+        mcp_module.set_service_factory(original)
+
+
+def test_init_room_no_browser_when_no_port_file(db, tmp_path, monkeypatch):
+    """init_room() omits web_url and does not open browser when port file is missing."""
+    from unittest.mock import patch
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+
+    monkeypatch.setenv("CHATNUT_RUN_DIR", str(tmp_path))
+
+    svc = ChatService(db)
+    original = mcp_module._service_factory
+    mcp_module.set_service_factory(lambda: svc)
+    try:
+        with patch("webbrowser.open") as mock_browser:
+            result = mcp_module.init_room("test-proj", "test-room-2")
+        assert "web_url" not in result
+        mock_browser.assert_not_called()
+    finally:
+        mcp_module.set_service_factory(original)
+
+
 def test_ping_version_no_update(db):
     from unittest.mock import patch
     from chatnut import mcp as mcp_module

@@ -30,18 +30,7 @@ result = init_room(project="<project-name>", name="<team-name>", branch="<branch
 
 The returned `id` is a stable UUID. Pass it to teammates so they can use `room_id` for all reads/writes (faster, no name lookup).
 
-To view the web UI: open your server URL in a browser.
-
-## Auto-Open Web UI
-
-After `init_room`, open the browser directly to the new chatroom:
-
-```bash
-PORT=$(cat ~/.chatnut/server.port 2>/dev/null || echo "8000")
-open "http://127.0.0.1:${PORT}/?room=${ROOM_ID}"
-```
-
-Replace `${ROOM_ID}` with the `id` returned by `init_room`. The port file (`~/.chatnut/server.port`) is written by the server on startup; the fallback of `8000` applies when the file is absent (e.g., custom installs).
+The web UI is automatically opened in the user's browser when `init_room` is called. The response includes a `web_url` field with the direct link.
 
 ## Server Recovery
 

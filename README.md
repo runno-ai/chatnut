@@ -86,12 +86,13 @@ Every discussion is stored and searchable. Filter by project or branch to find e
 
 ### Watch it happen live
 
-Open the web UI in your browser while agents work. Messages stream in real time — you can follow the debate, see who's typing, and understand how your agents reached their decisions.
+The web UI opens automatically in your browser when agents create a chatroom. Messages stream in real time — you can follow the debate, see who's typing, and understand how your agents reached their decisions.
+
+You can also open it manually:
 
 ```bash
-# Find the port and open in browser
-cat ~/.chatnut/server.port
-# Then open http://localhost:<port>
+chatnut open              # open web UI
+chatnut open <room-id>    # open a specific room
 ```
 
 ---

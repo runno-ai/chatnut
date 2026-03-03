@@ -33,7 +33,7 @@ if command -v claude &>/dev/null; then
     echo ""
     echo "Registering with Claude Code..."
     if claude mcp add chatnut -- "$BIN" 2>/dev/null; then
-        echo "  ✓ Registered as 'agents-chat' MCP server"
+        echo "  ✓ Registered as 'chatnut' MCP server"
     else
         echo "  ⚠ Auto-registration failed. Add manually to ~/.claude.json:"
         echo ""

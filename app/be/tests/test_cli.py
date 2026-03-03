@@ -135,6 +135,75 @@ class TestHelpers:
         assert _get_run_dir() == tmp_path
 
 
+class TestOpenCommand:
+    """Test the 'open' subcommand."""
+
+    def test_cmd_open_opens_browser(self, tmp_path, monkeypatch):
+        """cmd_open opens browser with server URL."""
+        monkeypatch.setenv("CHATNUT_RUN_DIR", str(tmp_path))
+        (tmp_path / "server.port").write_text("5555")
+        (tmp_path / "server.pid").write_text(str(os.getpid()))
+
+        from chatnut.cli import cmd_open
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+
+        args = MagicMock()
+        args.room_id = None
+        args.url_only = False
+
+        with patch("chatnut.cli.httpx.get", return_value=mock_resp), \
+             patch("webbrowser.open") as mock_browser:
+            cmd_open(args)
+
+        mock_browser.assert_called_once_with("http://127.0.0.1:5555")
+
+    def test_cmd_open_with_room_id(self, tmp_path, monkeypatch):
+        """cmd_open appends room_id to URL."""
+        monkeypatch.setenv("CHATNUT_RUN_DIR", str(tmp_path))
+        (tmp_path / "server.port").write_text("5555")
+        (tmp_path / "server.pid").write_text(str(os.getpid()))
+
+        from chatnut.cli import cmd_open
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+
+        args = MagicMock()
+        args.room_id = "abc-123"
+        args.url_only = False
+
+        with patch("chatnut.cli.httpx.get", return_value=mock_resp), \
+             patch("webbrowser.open") as mock_browser:
+            cmd_open(args)
+
+        mock_browser.assert_called_once_with("http://127.0.0.1:5555/?room=abc-123")
+
+    def test_cmd_open_url_only(self, tmp_path, monkeypatch, capsys):
+        """cmd_open --url-only prints URL instead of opening browser."""
+        monkeypatch.setenv("CHATNUT_RUN_DIR", str(tmp_path))
+        (tmp_path / "server.port").write_text("5555")
+        (tmp_path / "server.pid").write_text(str(os.getpid()))
+
+        from chatnut.cli import cmd_open
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+
+        args = MagicMock()
+        args.room_id = "abc-123"
+        args.url_only = True
+
+        with patch("chatnut.cli.httpx.get", return_value=mock_resp), \
+             patch("webbrowser.open") as mock_browser:
+            cmd_open(args)
+
+        mock_browser.assert_not_called()
+        captured = capsys.readouterr()
+        assert "http://127.0.0.1:5555/?room=abc-123" in captured.out
+
+
 class TestEnsureServer:
     """Test _ensure_server auto-start logic."""
 

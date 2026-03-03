@@ -1,8 +1,10 @@
 """FastMCP tool definitions — thin wrappers over ChatService."""
 
 import asyncio
+import os
 from collections import defaultdict
 from collections.abc import Callable
+from pathlib import Path
 
 import anyio
 from fastmcp import FastMCP
@@ -43,6 +45,19 @@ def _get_service() -> ChatService:
     return _service_factory()
 
 
+def _get_web_base_url() -> str | None:
+    """Read server port file and return base URL, or None if unavailable."""
+    run_dir = Path(os.environ.get("CHATNUT_RUN_DIR", Path.home() / ".chatnut"))
+    port_file = run_dir / "server.port"
+    if not port_file.exists():
+        return None
+    try:
+        port = int(port_file.read_text().strip())
+        return f"http://127.0.0.1:{port}"
+    except (ValueError, OSError):
+        return None
+
+
 def _notify_waiters(room_id: str) -> None:
     """Wake up all wait_for_messages callers blocked on room_id.
 
@@ -75,6 +90,9 @@ def ping() -> dict:
     """Health check — returns the database file path, status, and version info."""
     result = {"db_path": _get_service().db_path(), "status": "ok"}
     result.update(get_cached_version_info().to_dict())
+    web_url = _get_web_base_url()
+    if web_url:
+        result["web_url"] = web_url
     return result
 
 
@@ -85,8 +103,20 @@ def init_room(
     branch: str | None = None,
     description: str | None = None,
 ) -> dict:
-    """Create a new chatroom. Idempotent — returns existing room if already created."""
-    return _get_service().init_room(project, name, branch=branch, description=description)
+    """Create a new chatroom. Idempotent — returns existing room if already created.
+
+    Automatically opens the chatroom in the user's browser when the server is running.
+    The response includes a `web_url` field with the direct link.
+    """
+    import webbrowser
+
+    result = _get_service().init_room(project, name, branch=branch, description=description)
+    web_url = _get_web_base_url()
+    if web_url:
+        room_url = f"{web_url}/?room={result['id']}"
+        result["web_url"] = room_url
+        webbrowser.open(room_url)
+    return result
 
 
 @mcp.tool()

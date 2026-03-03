@@ -1,8 +1,9 @@
 """CLI entry point for chatnut.
 
 Usage:
-    chatnut          # stdio mode (default) — proxy to HTTP server
-    chatnut serve    # run HTTP server in foreground
+    chatnut              # stdio mode (default) — proxy to HTTP server
+    chatnut serve        # run HTTP server in foreground
+    chatnut open [room]  # open web UI in browser
 """
 import argparse
 import atexit
@@ -148,6 +149,18 @@ def _ensure_server() -> str:
     raise RuntimeError("Failed to start chatnut server within 10 seconds")
 
 
+def cmd_open(args: argparse.Namespace) -> None:
+    """Open the web UI in the default browser."""
+    import webbrowser
+
+    server_url = _ensure_server()
+    url = f"{server_url}/?room={args.room_id}" if args.room_id else server_url
+    if args.url_only:
+        print(url)
+    else:
+        webbrowser.open(url)
+
+
 def cmd_stdio(args: argparse.Namespace) -> None:
     """Run as stdio MCP proxy — auto-starts HTTP server if needed."""
     import asyncio
@@ -171,6 +184,11 @@ def main() -> None:
     serve_parser = sub.add_parser("serve", help="Run HTTP server in foreground")
     serve_parser.add_argument("--port", type=int, default=0, help="Port to bind (0 = auto)")
     serve_parser.set_defaults(func=cmd_serve)
+
+    open_parser = sub.add_parser("open", help="Open web UI in browser")
+    open_parser.add_argument("room_id", nargs="?", default=None, help="Room UUID to open directly")
+    open_parser.add_argument("--url-only", action="store_true", help="Print URL instead of opening browser")
+    open_parser.set_defaults(func=cmd_open)
 
     parser.set_defaults(func=cmd_stdio)
 
