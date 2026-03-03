@@ -17,7 +17,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 10
     env:
-      BROWSER: "echo"  # prevent webbrowser.open from launching a real browser
+      CHATNUT_OPEN_BROWSER: "0"  # suppress auto-open in CI
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
       - uses: actions/checkout@v4

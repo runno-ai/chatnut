@@ -107,15 +107,16 @@ def init_room(
 
     Automatically opens the chatroom in the user's browser when the server is running.
     The response includes a `web_url` field with the direct link.
+    Set CHATNUT_OPEN_BROWSER=0 to suppress auto-open (e.g. in CI/tests).
     """
-    import webbrowser
-
     result = _get_service().init_room(project, name, branch=branch, description=description)
     web_url = _get_web_base_url()
     if web_url:
         room_url = f"{web_url}/?room={result['id']}"
         result["web_url"] = room_url
-        webbrowser.open(room_url)
+        if os.environ.get("CHATNUT_OPEN_BROWSER", "1") != "0":
+            import webbrowser
+            webbrowser.open(room_url)
     return result
 
 

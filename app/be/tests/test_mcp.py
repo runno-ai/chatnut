@@ -139,6 +139,7 @@ def test_init_room_includes_web_url_and_opens_browser(db, tmp_path, monkeypatch)
     from chatnut.service import ChatService
 
     monkeypatch.setenv("CHATNUT_RUN_DIR", str(tmp_path))
+    monkeypatch.setenv("CHATNUT_OPEN_BROWSER", "1")  # re-enable for this test
     (tmp_path / "server.port").write_text("4321")
 
     svc = ChatService(db)
