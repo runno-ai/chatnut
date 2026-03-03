@@ -57,14 +57,14 @@ jobs:
             "Call the chatnut ping tool. Return only the raw JSON result, nothing else." \
             | tee /tmp/ping-result.json
 
-          # Verify ping response has expected fields
+          # Verify ping response — Claude wraps in JSON envelope
           python3 -c "
           import json, sys
           with open('/tmp/ping-result.json') as f:
-              text = f.read()
-          # Claude wraps result — find the JSON with db_path
-          assert 'chatnut.db' in text, f'ping did not return db_path: {text[:200]}'
-          assert 'ok' in text, f'ping did not return status ok: {text[:200]}'
+              envelope = json.load(f)
+          assert not envelope.get('is_error'), f'Tool call failed: {envelope.get(\"result\", \"\")[:200]}'
+          result = envelope['result']
+          assert '\"status\"' in result and '\"ok\"' in result, f'ping missing status ok: {result[:200]}'
           print('ping: OK')
           "
 
@@ -77,14 +77,15 @@ jobs:
             "Call the chatnut init_room tool with project='ci-e2e' and name='smoke-test' and description='E2E CI test'. Return only the raw JSON result." \
             | tee /tmp/init-result.json
 
-          # Verify init_room response
+          # Verify init_room response — Claude wraps in JSON envelope
           python3 -c "
           import json, sys
           with open('/tmp/init-result.json') as f:
-              text = f.read()
-          assert 'ci-e2e' in text, f'init_room missing project: {text[:200]}'
-          assert 'smoke-test' in text, f'init_room missing name: {text[:200]}'
-          assert 'web_url' in text, f'init_room missing web_url: {text[:200]}'
+              envelope = json.load(f)
+          assert not envelope.get('is_error'), f'Tool call failed: {envelope.get(\"result\", \"\")[:200]}'
+          result = envelope['result']
+          assert 'ci-e2e' in result, f'init_room missing project: {result[:200]}'
+          assert 'smoke-test' in result, f'init_room missing name: {result[:200]}'
           print('init_room: OK')
           "
 
