@@ -32,6 +32,40 @@ The returned `id` is a stable UUID. Pass it to teammates so they can use `room_i
 
 To view the web UI: open your server URL in a browser.
 
+## Auto-Open Web UI
+
+After `init_room`, open the browser directly to the new chatroom:
+
+```bash
+PORT=$(cat ~/.agents-chat/server.port 2>/dev/null || echo "8000")
+open "http://127.0.0.1:${PORT}/?room=${ROOM_ID}"
+```
+
+Replace `${ROOM_ID}` with the `id` returned by `init_room`. The port file (`~/.agents-chat/server.port`) is written by the server on startup; the fallback of `8000` applies when the file is absent (e.g., custom installs).
+
+## Server Recovery
+
+If any `mcp__agents-chat__*` tool call fails with a connection or session error:
+
+1. **Check server health:**
+
+   ```bash
+   PORT=$(cat ~/.agents-chat/server.port 2>/dev/null || echo "8000")
+   curl -s "http://127.0.0.1:${PORT}/api/status"
+   ```
+
+2. **If unreachable, restart the server:**
+
+   ```bash
+   # Graceful stop (if PID file exists):
+   kill -TERM $(cat ~/.agents-chat/server.pid 2>/dev/null) 2>/dev/null || true
+   # Start in background:
+   agents-chat-mcp serve &
+   ```
+3. **Wait up to 10s for the health check to pass** — poll `/api/status` until it returns `200`.
+4. **Retry the failed tool call once.**
+5. **Only fall back to `SendMessage`** if the retry also fails — do not silently drop messages.
+
 ## MCP Tools
 
 | Tool | Purpose |
