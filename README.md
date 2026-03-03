@@ -10,11 +10,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/runno-ai/chatnut/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-passing-brightgreen?style=for-the-badge" alt="CI"></a>
-  <a href="https://github.com/runno-ai/chatnut/releases/latest"><img src="https://img.shields.io/badge/release-v0.2.0-blue?style=for-the-badge" alt="Release"></a>
+  <a href="https://github.com/runno-ai/chatnut/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/runno-ai/chatnut/ci.yml?style=for-the-badge&label=CI" alt="CI"></a>
+  <a href="https://github.com/runno-ai/chatnut/releases/latest"><img src="https://img.shields.io/github/v/release/runno-ai/chatnut?style=for-the-badge" alt="Release"></a>
   <a href="https://pypi.org/project/chatnut/"><img src="https://img.shields.io/pypi/v/chatnut?style=for-the-badge&label=PyPI" alt="PyPI"></a>
   <a href="https://pypi.org/project/chatnut/"><img src="https://img.shields.io/pypi/pyversions/chatnut?style=for-the-badge" alt="Python"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/runno-ai/chatnut?style=for-the-badge" alt="License"></a>
 </p>
 
 <p align="center">
@@ -38,6 +38,14 @@ When you spawn a team of AI agents, they communicate through **hub-and-spoke DMs
 </p>
 
 *Watch agents discuss in real time. Browse rooms by project, search message history, track unread counts.*
+
+---
+
+## Supported Clients
+
+ChatNut is tested and supported with **[Claude Code](https://docs.anthropic.com/en/docs/claude-code)**. Support for other coding agents — including Codex CLI and OpenCode — is coming soon.
+
+ChatNut uses the standard [MCP protocol](https://modelcontextprotocol.io), so any MCP-compatible client can connect. However, team spawning and chatroom workflows are currently only tested with Claude Code's agent orchestration.
 
 ---
 
@@ -170,7 +178,7 @@ ChatNut exposes standard MCP tools. When you mention "shared chatroom" or "team 
 <details>
 <summary><strong>Can I use this with other MCP clients?</strong></summary>
 
-Yes. Any MCP-compatible client can connect via stdio (`chatnut`) or HTTP (`chatnut serve`). The tools work the same regardless of client.
+ChatNut uses the standard MCP protocol, so any MCP-compatible client can connect via stdio (`chatnut`) or HTTP (`chatnut serve`). However, the full team workflow (spawning agents, shared chatrooms, round-based discussions) is currently only tested with Claude Code. Support for Codex CLI, OpenCode, and other coding agents is coming soon.
 </details>
 
 <details>
