@@ -23,7 +23,7 @@ app/
     chatnut/
       __init__.py
       app.py             # FastAPI app — mounts MCP + routes + static serving
-      cli.py             # CLI entry point (stdio proxy + serve subcommand)
+      cli.py             # CLI entry point (stdio proxy, serve, open subcommands)
       mcp.py             # FastMCP tool definitions (thin wrappers over ChatService)
       service.py         # ChatService class — all business logic
       db.py              # SQLite schema, queries (UUID rooms, project scoping)
@@ -75,6 +75,12 @@ chatnut serve --port 8000
 # Run as stdio MCP proxy (auto-starts server if needed)
 chatnut
 
+# Open web UI in browser (auto-starts server if needed)
+chatnut open
+
+# Open a specific room
+chatnut open <room-id>
+
 # Frontend setup
 cd app/fe && bun install
 
@@ -95,6 +101,7 @@ cd app/fe && bun run test
 | `CHAT_DB_PATH` | SQLite database file path | `~/.chatnut/chatnut.db` |
 | `STATIC_DIR` | Path to built React SPA | `chatnut/static/` (bundled in wheel) |
 | `CHATNUT_RUN_DIR` | Runtime dir for PID/port files | `~/.chatnut/` |
+| `CHATNUT_OPEN_BROWSER` | Auto-open browser on `init_room` (`0` to suppress) | `1` |
 
 ## MCP Registration
 
@@ -136,8 +143,8 @@ Tools and routes never touch the DB directly. Tests instantiate `ChatService` wi
 
 | Tool | Signature | Purpose |
 |------|-----------|---------|
-| `ping` | `()` | Health check (DB path, version info) |
-| `init_room` | `(project, name, branch?, description?)` | Create a chatroom (idempotent) |
+| `ping` | `()` | Health check (DB path, version info, `web_url` if server running) |
+| `init_room` | `(project, name, branch?, description?)` | Create a chatroom (idempotent); auto-opens browser via `web_url` |
 | `post_message` | `(room_id, sender, content, message_type?)` | Post a message by room_id |
 | `read_messages` | `(room_id, since_id?, limit?, message_type?)` | Read messages by room_id |
 | `wait_for_messages` | `(room_id, since_id, timeout?, limit?, message_type?)` | Block until new messages arrive (long-poll, max 60s); returns `timed_out=True` on timeout |
@@ -212,6 +219,21 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on push to `main` and on PRs ta
 | **Backend Tests** | `uv sync --extra test` + `pytest -x` |
 | **Frontend** | `bun install` + `tsc --noEmit` + `vitest run` + `vite build` |
 
+## E2E CI
+
+`.github/workflows/e2e.yml` runs on push to `main` and via `workflow_dispatch`. Tests the full install-to-MCP-tool-execution flow:
+
+| Step | What it does |
+|------|-------------|
+| Install from source | `uv tool install ./app/be` (tests HEAD, not PyPI) |
+| Verify CLI | `chatnut --help`, `chatnut open --help` |
+| Register MCP | `claude mcp add chatnut -- $(which chatnut)` |
+| Headless Claude tests | `claude -p` calls `ping` and `init_room` tools |
+| DB verification | Direct SQLite queries to verify room creation |
+| Health check | `curl` to server `/api/status` endpoint |
+
+Requires `CLAUDE_CODE_OAUTH_TOKEN` secret (OAuth token from `claude setup-token`).
+
 ## CD
 
 `.github/workflows/cd.yml` is triggered **only via `workflow_dispatch`** — either by the `/deployment` skill or manually via `gh workflow run cd.yml --ref main`.
@@ -237,6 +259,7 @@ Uses PyPI OIDC Trusted Publishing (no stored secrets). See [RELEASING.md](RELEAS
 - **`since_id` for incremental reads** — agents poll with last-seen message ID
 - **Read cursors for unread tracking** — `(room_id, reader)` PK, forward-only via `MAX()` in UPSERT, `ON DELETE CASCADE` for cleanup
 - **`wait_for_messages` for agent blocking** — asyncio.Queue per waiter; `post_message` notifies via `call_soon_threadsafe(_wake_all)` (all `_waiters` access event-loop-only); zero DB reads while waiting; agents call once instead of polling in a loop; timeout capped at 60s
+- **Auto-open browser on `init_room`** — `init_room` reads `server.port` file, constructs `web_url`, and calls `webbrowser.open()` automatically; suppressed via `CHATNUT_OPEN_BROWSER=0` in tests/CI; `conftest.py` has autouse `_suppress_browser` fixture
 - **Update notification via GitHub releases API** — `version_check.py` fetches latest release tag from GitHub with 1hr in-memory TTL cache; `get_version_info()` (async) populates cache, `get_cached_version_info()` (sync) reads it without I/O; three consumers: startup log warning, `ping()` tool, `/api/status` endpoint; frontend `useVersion` hook fetches `/api/status` on load and shows a dismissible amber banner
 
 ## E2E Testing Patterns

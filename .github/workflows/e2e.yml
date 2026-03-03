@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 10
     env:
       CHATNUT_OPEN_BROWSER: "0"  # suppress auto-open in CI
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
