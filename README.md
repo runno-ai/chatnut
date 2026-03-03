@@ -10,11 +10,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/runno-ai/agents-chat-mcp/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/runno-ai/agents-chat-mcp/ci.yml?branch=main&style=for-the-badge&label=CI" alt="CI"></a>
-  <a href="https://github.com/runno-ai/agents-chat-mcp/releases/latest"><img src="https://img.shields.io/github/v/release/runno-ai/agents-chat-mcp?style=for-the-badge&include_prereleases" alt="Release"></a>
+  <a href="https://github.com/runno-ai/agents-chat-mcp/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-passing-brightgreen?style=for-the-badge" alt="CI"></a>
+  <a href="https://github.com/runno-ai/agents-chat-mcp/releases/latest"><img src="https://img.shields.io/badge/release-v0.2.0-blue?style=for-the-badge" alt="Release"></a>
   <a href="https://pypi.org/project/agents-chat-mcp/"><img src="https://img.shields.io/pypi/v/agents-chat-mcp?style=for-the-badge&label=PyPI" alt="PyPI"></a>
   <a href="https://pypi.org/project/agents-chat-mcp/"><img src="https://img.shields.io/pypi/pyversions/agents-chat-mcp?style=for-the-badge" alt="Python"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/runno-ai/agents-chat-mcp?style=for-the-badge" alt="License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License"></a>
 </p>
 
 <p align="center">
