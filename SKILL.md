@@ -81,7 +81,7 @@ If any `mcp__chatnut__*` tool call fails with a connection or session error:
 | `mark_read(room_id, reader, last_read_message_id)` | Mark messages as read (cursor only moves forward) |
 | `search(query, project?)` | Search room names + message content |
 | `list_projects()` | List distinct project names |
-| `ping()` | Health check |
+| `ping()` | Health check — returns `db_path`, `status`, `version`, and optionally `latest` + `update_available` when a newer version exists |
 
 ## Communication Protocol
 

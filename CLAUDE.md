@@ -28,6 +28,7 @@ app/
       service.py         # ChatService class — all business logic
       db.py              # SQLite schema, queries (UUID rooms, project scoping)
       models.py          # Dataclasses for Room, Message
+      version_check.py   # GitHub releases API version check with TTL cache
     tests/
       conftest.py        # Shared fixtures (in-memory DB)
       test_models.py
@@ -41,8 +42,8 @@ app/
     .python-version
   fe/
     src/
-      components/        # React components (Sidebar, ChatView, Message, etc.)
-      hooks/             # Custom hooks (useChatrooms, useSSE, useSearch, useProjects)
+      components/        # React components (Sidebar, ChatView, Message, UpdateBanner, etc.)
+      hooks/             # Custom hooks (useChatrooms, useSSE, useSearch, useProjects, useVersion)
       types.ts           # TypeScript interfaces
       App.tsx
     package.json
@@ -135,7 +136,7 @@ Tools and routes never touch the DB directly. Tests instantiate `ChatService` wi
 
 | Tool | Signature | Purpose |
 |------|-----------|---------|
-| `ping` | `()` | Health check (DB path) |
+| `ping` | `()` | Health check (DB path, version info) |
 | `init_room` | `(project, name, branch?, description?)` | Create a chatroom (idempotent) |
 | `post_message` | `(room_id, sender, content, message_type?)` | Post a message by room_id |
 | `read_messages` | `(room_id, since_id?, limit?, message_type?)` | Read messages by room_id |
@@ -156,7 +157,7 @@ The in-repo `SKILL.md` documents all MCP tools, their signatures, and usage patt
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `GET /api/status` | REST | Health check |
+| `GET /api/status` | REST | Health check + version info |
 | `GET /api/projects` | REST | Distinct project list |
 | `GET /api/chatrooms` | REST | Filtered room list (?project, ?branch, ?status) |
 | `GET /api/chatrooms/{room_id}/messages` | REST | Messages for a room (?since_id, ?limit) |
@@ -236,6 +237,7 @@ Uses PyPI OIDC Trusted Publishing (no stored secrets). See [RELEASING.md](RELEAS
 - **`since_id` for incremental reads** — agents poll with last-seen message ID
 - **Read cursors for unread tracking** — `(room_id, reader)` PK, forward-only via `MAX()` in UPSERT, `ON DELETE CASCADE` for cleanup
 - **`wait_for_messages` for agent blocking** — asyncio.Queue per waiter; `post_message` notifies via `call_soon_threadsafe(_wake_all)` (all `_waiters` access event-loop-only); zero DB reads while waiting; agents call once instead of polling in a loop; timeout capped at 60s
+- **Update notification via GitHub releases API** — `version_check.py` fetches latest release tag from GitHub with 1hr in-memory TTL cache; `get_version_info()` (async) populates cache, `get_cached_version_info()` (sync) reads it without I/O; three consumers: startup log warning, `ping()` tool, `/api/status` endpoint; frontend `useVersion` hook fetches `/api/status` on load and shows a dismissible amber banner
 
 ## E2E Testing Patterns
 
