@@ -1,0 +1,114 @@
+name: E2E
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: E2E Install & MCP
+    runs-on: macos-latest
+    timeout-minutes: 10
+    env:
+      BROWSER: "echo"  # prevent webbrowser.open from launching a real browser
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Install toolchain ---
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      # --- Step 1: Run install.sh ---
+      - name: Run install.sh
+        run: bash install.sh
+
+      # --- Step 2: Verify install ---
+      - name: Verify chatnut CLI
+        run: |
+          which chatnut
+          chatnut --help
+          chatnut open --help
+
+      - name: Verify MCP registration
+        run: |
+          claude mcp list 2>&1 | tee /tmp/mcp-list.txt
+          grep -q "chatnut" /tmp/mcp-list.txt
+
+      # --- Step 3: Headless Claude calls MCP tools ---
+      - name: Test ping via headless Claude
+        run: |
+          claude -p \
+            --model sonnet \
+            --output-format json \
+            --dangerously-skip-permissions \
+            "Call the chatnut ping tool. Return only the raw JSON result, nothing else." \
+            | tee /tmp/ping-result.json
+
+          # Verify ping response has expected fields
+          python3 -c "
+          import json, sys
+          with open('/tmp/ping-result.json') as f:
+              text = f.read()
+          # Claude wraps result — find the JSON with db_path
+          assert 'chatnut.db' in text, f'ping did not return db_path: {text[:200]}'
+          assert 'ok' in text, f'ping did not return status ok: {text[:200]}'
+          print('ping: OK')
+          "
+
+      - name: Test init_room via headless Claude
+        run: |
+          claude -p \
+            --model sonnet \
+            --output-format json \
+            --dangerously-skip-permissions \
+            "Call the chatnut init_room tool with project='ci-e2e' and name='smoke-test' and description='E2E CI test'. Return only the raw JSON result." \
+            | tee /tmp/init-result.json
+
+          # Verify init_room response
+          python3 -c "
+          import json, sys
+          with open('/tmp/init-result.json') as f:
+              text = f.read()
+          assert 'ci-e2e' in text, f'init_room missing project: {text[:200]}'
+          assert 'smoke-test' in text, f'init_room missing name: {text[:200]}'
+          assert 'web_url' in text, f'init_room missing web_url: {text[:200]}'
+          print('init_room: OK')
+          "
+
+      # --- Step 4: Verify DB directly ---
+      - name: Verify DB state
+        run: |
+          DB="$HOME/.chatnut/chatnut.db"
+          echo "DB path: $DB"
+          ls -la "$DB"
+
+          # Verify room exists
+          ROOM=$(sqlite3 "$DB" "SELECT id, project, name, status FROM rooms WHERE project='ci-e2e' AND name='smoke-test'")
+          echo "Room: $ROOM"
+          [ -n "$ROOM" ] || { echo "FAIL: room not found in DB"; exit 1; }
+
+          # Verify room is live
+          echo "$ROOM" | grep -q "live" || { echo "FAIL: room not live"; exit 1; }
+
+          echo "DB verification: OK"
+
+      - name: Verify server port file
+        run: |
+          PORT_FILE="$HOME/.chatnut/server.port"
+          [ -f "$PORT_FILE" ] || { echo "FAIL: server.port not found"; exit 1; }
+          PORT=$(cat "$PORT_FILE")
+          echo "Server running on port: $PORT"
+
+          # Health check
+          curl -sf "http://127.0.0.1:${PORT}/api/status" | python3 -m json.tool
+          echo "Health check: OK"
