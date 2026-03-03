@@ -13,6 +13,7 @@ dependencies = [
     "uvicorn[standard]>=0.34.0",
     "sse-starlette>=2.0.0",
     "anyio>=4.0",
+    "httpx>=0.28.0",
 ]
 
 classifiers = [
@@ -24,6 +25,9 @@ classifiers = [
     "Topic :: Communications :: Chat",
     "Framework :: FastAPI",
 ]
+
+[project.scripts]
+agents-chat-mcp = "agents_chat_mcp.cli:main"
 
 [project.urls]
 Repository = "https://github.com/runno-ai/agents-chat-mcp"
