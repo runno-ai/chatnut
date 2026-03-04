@@ -204,12 +204,18 @@ def test_archive_room_already_archived(db):
 
 def test_clear_room(db):
     svc = ChatService(db)
-    svc.init_room("proj", "dev")
+    room = svc.init_room("proj", "dev")
     svc.post_message("proj", "dev", "alice", "hello")
     svc.post_message("proj", "dev", "bob", "world")
+    # Add some statuses before clearing
+    svc.update_status(room["id"], "alice", "working")
+    svc.update_status(room["id"], "bob", "idle")
     result = svc.clear_room("proj", "dev")
     assert result["name"] == "dev"
     assert result["deleted_count"] == 2
+    # Verify room_status records are also deleted after clear_room
+    status_result = svc.get_team_status(room["id"])
+    assert status_result["statuses"] == []
 
 
 def test_clear_room_not_found(db):
@@ -550,3 +556,115 @@ def test_search_rejects_empty_query(db):
         svc.search("")
     with pytest.raises(ValueError, match="query"):
         svc.search("   ")
+
+
+# --- update_status and get_team_status ---
+
+
+def test_update_status(db):
+    """update_status stores a sender's status in the room."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    result = svc.update_status(room["id"], "alice", "working on auth")
+    assert result["room_id"] == room["id"]
+    assert result["sender"] == "alice"
+    assert result["status"] == "working on auth"
+    assert "updated_at" in result
+
+
+def test_update_status_upsert(db):
+    """update_status overwrites a sender's previous status (upsert semantics)."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.update_status(room["id"], "alice", "idle")
+    result = svc.update_status(room["id"], "alice", "reviewing PR")
+    assert result["status"] == "reviewing PR"
+
+
+def test_update_status_nonexistent_room(db):
+    """update_status raises ValueError for a nonexistent room."""
+    svc = ChatService(db)
+    with pytest.raises(ValueError, match="not found"):
+        svc.update_status("nonexistent-room-id", "alice", "working")
+
+
+def test_update_status_archived_room(db):
+    """update_status raises ValueError for an archived room."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.archive_room("proj", "dev")
+    with pytest.raises(ValueError, match="archived"):
+        svc.update_status(room["id"], "alice", "working")
+
+
+def test_get_team_status(db):
+    """get_team_status returns all sender statuses for a room, ordered by updated_at DESC then sender ASC."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.update_status(room["id"], "alice", "coding")
+    svc.update_status(room["id"], "bob", "reviewing")
+    result = svc.get_team_status(room["id"])
+    assert "statuses" in result
+    statuses = result["statuses"]
+    assert len(statuses) == 2
+    senders = {s["sender"] for s in statuses}
+    assert senders == {"alice", "bob"}
+    for entry in statuses:
+        assert "room_id" in entry
+        assert "status" in entry
+        assert "updated_at" in entry
+    # Verify deterministic ordering: updated_at DESC, then sender ASC
+    # bob was updated last, so bob should come first
+    assert statuses[0]["sender"] == "bob"
+    assert statuses[1]["sender"] == "alice"
+
+
+def test_get_team_status_empty(db):
+    """get_team_status returns an empty statuses list when no statuses have been set."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    result = svc.get_team_status(room["id"])
+    assert result == {"statuses": []}
+
+
+def test_get_team_status_nonexistent_room(db):
+    """get_team_status raises ValueError for a nonexistent room."""
+    svc = ChatService(db)
+    with pytest.raises(ValueError, match="not found"):
+        svc.get_team_status("nonexistent-room-id")
+
+
+def test_update_status_empty_sender(db):
+    """update_status rejects empty sender string."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    with pytest.raises(ValueError, match="sender must be a non-empty"):
+        svc.update_status(room["id"], "", "working")
+    with pytest.raises(ValueError, match="sender must be a non-empty"):
+        svc.update_status(room["id"], "   ", "working")
+
+
+def test_update_status_empty_status(db):
+    """update_status rejects empty status string."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    with pytest.raises(ValueError, match="status must be a non-empty"):
+        svc.update_status(room["id"], "alice", "")
+    with pytest.raises(ValueError, match="status must be a non-empty"):
+        svc.update_status(room["id"], "alice", "   ")
+
+
+def test_update_status_max_length_accepted(db):
+    """update_status accepts status of exactly 500 characters."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    result = svc.update_status(room["id"], "alice", "x" * 500)
+    assert result["status"] == "x" * 500
+
+
+def test_update_status_too_long(db):
+    """update_status rejects status longer than 500 characters."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    with pytest.raises(ValueError, match="500 characters"):
+        svc.update_status(room["id"], "alice", "x" * 501)

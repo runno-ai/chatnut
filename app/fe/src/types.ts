@@ -41,3 +41,14 @@ export interface VersionStatus {
   latest?: string;
   update_available?: boolean;
 }
+
+export interface RoomStatus {
+  sender: string;
+  status: string;
+  updated_at: string;
+}
+
+export interface TeamStatusResponse {
+  room_id: string;
+  statuses: RoomStatus[];
+}

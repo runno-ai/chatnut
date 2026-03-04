@@ -19,6 +19,9 @@ from chatnut.db import (
     upsert_read_cursor,
     get_read_cursor,
     get_unread_counts as db_get_unread_counts,
+    upsert_room_status,
+    get_room_statuses,
+    delete_room_statuses,
 )
 
 
@@ -47,6 +50,9 @@ class ChatService:
         branch: str | None = None,
         description: str | None = None,
     ) -> dict:
+        # team_name is intentionally absent from the service layer — it is a
+        # Claude-specific concern (writing chatroom.json to ~/.claude/teams/)
+        # and is handled exclusively at the MCP tool layer in mcp.py.
         room = create_room(self.db, project=project, name=name, branch=branch, description=description)
         return room.to_dict()
 
@@ -166,6 +172,7 @@ class ChatService:
         if room_obj is None:
             raise ValueError(f"Room '{name}' in project '{project}' not found")
         count = delete_messages(self.db, room_obj.id)
+        delete_room_statuses(self.db, room_obj.id)
         return {"name": name, "project": project, "deleted_count": count}
 
     def auto_archive_stale_rooms(self, max_inactive_seconds: int = 7200) -> list[dict]:
@@ -192,6 +199,36 @@ class ChatService:
     def get_unread_counts(self, room_ids: list[str], reader: str) -> dict[str, int]:
         """Get unread message counts for multiple rooms for a given reader."""
         return db_get_unread_counts(self.db, room_ids, reader)
+
+    def update_status(self, room_id: str, sender: str, status: str) -> dict:
+        """Set or update a sender's status in a room.
+
+        Raises ValueError if the room does not exist or is archived,
+        or if sender/status are empty, or if status exceeds 500 chars.
+        """
+        if not sender or not sender.strip():
+            raise ValueError("sender must be a non-empty string")
+        if not status or not status.strip():
+            raise ValueError("status must be a non-empty string")
+        if len(status) > 500:
+            raise ValueError("status must be 500 characters or fewer")
+        room_obj = get_room_by_id(self.db, room_id)
+        if room_obj is None:
+            raise ValueError(f"Room '{room_id}' not found")
+        if room_obj.status == "archived":
+            raise ValueError(f"Room '{room_obj.name}' is archived — cannot update status")
+        return upsert_room_status(self.db, room_id, sender, status)
+
+    def get_team_status(self, room_id: str) -> dict:
+        """Get all current statuses for all senders in a room.
+
+        Returns {"statuses": [...]} dict.
+        Raises ValueError if the room does not exist.
+        """
+        room_obj = get_room_by_id(self.db, room_id)
+        if room_obj is None:
+            raise ValueError(f"Room '{room_id}' not found")
+        return {"statuses": get_room_statuses(self.db, room_id)}
 
     def search(self, query: str, project: str | None = None) -> dict:
         if not query or not query.strip():

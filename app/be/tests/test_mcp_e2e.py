@@ -410,3 +410,64 @@ async def test_e2e_read_messages_type_filter(mcp_svc):
     assert all(m["message_type"] == "system" for m in sys_result["messages"])
     assert len(user_result["messages"]) == 1
     assert len(sys_result["messages"]) == 1
+
+
+# --- Status tools E2E tests ---
+
+@pytest.mark.anyio
+async def test_status_round_trip(mcp_svc):
+    """update_status (set + UPSERT) and get_team_status round-trip."""
+    async with Client(mcp_module.mcp) as client:
+        room = await call(client, "init_room", {"project": "proj", "name": "team-room"})
+        room_id = room["id"]
+
+        # Set status for two agents
+        r1 = await call(client, "update_status", {"room_id": room_id, "sender": "agent-1", "status": "idle"})
+        assert r1["sender"] == "agent-1"
+        assert r1["status"] == "idle"
+        r2 = await call(client, "update_status", {"room_id": room_id, "sender": "agent-2", "status": "working"})
+        assert r2["sender"] == "agent-2"
+        assert r2["status"] == "working"
+
+        # get_team_status returns both statuses
+        team = await call(client, "get_team_status", {"room_id": room_id})
+        assert len(team["statuses"]) == 2
+        senders = {s["sender"] for s in team["statuses"]}
+        assert senders == {"agent-1", "agent-2"}
+
+        # UPSERT: update agent-1 status
+        await call(client, "update_status", {"room_id": room_id, "sender": "agent-1", "status": "done"})
+
+        # Verify agent-1's status changed, count still 2
+        team2 = await call(client, "get_team_status", {"room_id": room_id})
+        assert len(team2["statuses"]) == 2
+        statuses_by_sender = {s["sender"]: s["status"] for s in team2["statuses"]}
+        assert statuses_by_sender["agent-1"] == "done"
+        assert statuses_by_sender["agent-2"] == "working"
+
+
+@pytest.mark.anyio
+async def test_update_status_nonexistent_room(mcp_svc):
+    """update_status() with a non-existent room_id should return an MCP error."""
+    async with Client(mcp_module.mcp) as client:
+        result = await client.call_tool(
+            "update_status",
+            {"room_id": "00000000-0000-0000-0000-000000000000", "sender": "agent-1", "status": "idle"},
+            raise_on_error=False,
+        )
+    assert result.is_error is True
+
+
+@pytest.mark.anyio
+async def test_update_status_archived_room(mcp_svc):
+    """update_status() on an archived room should return an MCP error."""
+    async with Client(mcp_module.mcp) as client:
+        room = await call(client, "init_room", {"project": "proj", "name": "archived-room"})
+        room_id = room["id"]
+        await call(client, "archive_room", {"project": "proj", "name": "archived-room"})
+        result = await client.call_tool(
+            "update_status",
+            {"room_id": room_id, "sender": "agent-1", "status": "idle"},
+            raise_on_error=False,
+        )
+    assert result.is_error is True

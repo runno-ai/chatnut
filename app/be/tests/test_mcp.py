@@ -14,6 +14,7 @@ async def test_all_tools_registered():
         "ping", "init_room", "post_message", "read_messages",
         "list_rooms", "archive_room", "delete_room", "clear_room",
         "search", "list_projects", "mark_read", "wait_for_messages",
+        "update_status", "get_team_status",
     }
     assert expected.issubset(tool_names), f"Missing tools: {expected - tool_names}"
 
@@ -194,3 +195,164 @@ def test_ping_version_no_update(db):
         assert "update_available" not in result
     finally:
         mcp_module.set_service_factory(original)
+
+
+def test_init_room_writes_team_config(db, tmp_path, monkeypatch):
+    """init_room() writes chatroom.json to team dir when team_name is provided."""
+    import json
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+
+    monkeypatch.setenv("CHATNUT_OPEN_BROWSER", "0")
+    # Isolate from any running server by pointing run dir to tmp_path (no port file)
+    monkeypatch.setenv("CHATNUT_RUN_DIR", str(tmp_path))
+    teams_dir = tmp_path / "teams"
+    team_dir = teams_dir / "my-team"
+    team_dir.mkdir(parents=True)
+    monkeypatch.setenv("CLAUDE_TEAMS_DIR", str(teams_dir))
+
+    svc = ChatService(db)
+    original = mcp_module._service_factory
+    mcp_module.set_service_factory(lambda: svc)
+    try:
+        result = mcp_module.init_room("test-proj", "test-room", team_name="my-team")
+    finally:
+        mcp_module.set_service_factory(original)
+
+    chatroom_file = team_dir / "chatroom.json"
+    assert chatroom_file.exists(), "chatroom.json should be written to team dir"
+
+    data = json.loads(chatroom_file.read_text())
+    assert data["room_id"] == result["id"]
+    assert data["project"] == "test-proj"
+    assert data["name"] == "test-room"
+    assert "web_url" not in data  # no server running (no port file in tmp_path)
+
+
+def test_init_room_without_team_name_no_file(db, tmp_path, monkeypatch):
+    """init_room() without team_name writes no files to teams dir."""
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+
+    monkeypatch.setenv("CHATNUT_OPEN_BROWSER", "0")
+    teams_dir = tmp_path / "teams"
+    teams_dir.mkdir(parents=True)
+    monkeypatch.setenv("CLAUDE_TEAMS_DIR", str(teams_dir))
+
+    svc = ChatService(db)
+    original = mcp_module._service_factory
+    mcp_module.set_service_factory(lambda: svc)
+    try:
+        mcp_module.init_room("test-proj", "no-team-room")
+    finally:
+        mcp_module.set_service_factory(original)
+
+    # No files should be written anywhere under teams_dir
+    written = list(teams_dir.rglob("*"))
+    assert written == [], f"Expected no files written, but found: {written}"
+
+
+def test_init_room_team_write_failure_nonfatal(db, tmp_path, monkeypatch):
+    """init_room() still returns successfully when chatroom.json write fails."""
+    from unittest.mock import patch
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+
+    monkeypatch.setenv("CHATNUT_OPEN_BROWSER", "0")
+    teams_dir = tmp_path / "teams"
+    team_dir = teams_dir / "locked-team"
+    team_dir.mkdir(parents=True)
+    monkeypatch.setenv("CLAUDE_TEAMS_DIR", str(teams_dir))
+
+    svc = ChatService(db)
+    original = mcp_module._service_factory
+    mcp_module.set_service_factory(lambda: svc)
+    try:
+        with patch("pathlib.Path.write_text", side_effect=OSError("simulated write failure")):
+            result = mcp_module.init_room("test-proj", "fail-room", team_name="locked-team")
+    finally:
+        mcp_module.set_service_factory(original)
+
+    assert result["id"]
+    assert result["project"] == "test-proj"
+    assert result["name"] == "fail-room"
+
+
+def test_init_room_rejects_path_traversal(db, tmp_path, monkeypatch):
+    """init_room() with path traversal team_name writes no files outside teams dir."""
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+
+    monkeypatch.setenv("CHATNUT_OPEN_BROWSER", "0")
+    teams_dir = tmp_path / "teams"
+    teams_dir.mkdir(parents=True)
+    monkeypatch.setenv("CLAUDE_TEAMS_DIR", str(teams_dir))
+
+    svc = ChatService(db)
+    original = mcp_module._service_factory
+    mcp_module.set_service_factory(lambda: svc)
+    try:
+        # Path traversal attempt: "../../etc" should be rejected
+        result = mcp_module.init_room("test-proj", "traversal-room", team_name="../../etc")
+    finally:
+        mcp_module.set_service_factory(original)
+
+    # Room is still created (non-fatal rejection)
+    assert result["id"]
+
+    # No files should be written anywhere under teams_dir
+    written = list(teams_dir.rglob("*"))
+    assert written == [], f"Expected no files written, but found: {written}"
+
+    # Also ensure traversal did not write chatroom.json anywhere else in tmp sandbox
+    escaped_writes = [p for p in tmp_path.rglob("chatroom.json")]
+    assert escaped_writes == [], f"Unexpected escaped writes: {escaped_writes}"
+
+
+def test_mcp_update_status(db, monkeypatch):
+    """update_status() sets a sender's status in a room and returns the status record."""
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+
+    monkeypatch.setenv("CHATNUT_OPEN_BROWSER", "0")
+
+    svc = ChatService(db)
+    original = mcp_module._service_factory
+    mcp_module.set_service_factory(lambda: svc)
+    try:
+        room = mcp_module.init_room("test-proj", "status-room")
+        room_id = room["id"]
+        result = mcp_module.update_status(room_id, "agent-1", "working")
+    finally:
+        mcp_module.set_service_factory(original)
+
+    assert result["room_id"] == room_id
+    assert result["sender"] == "agent-1"
+    assert result["status"] == "working"
+    assert "updated_at" in result
+
+
+def test_mcp_get_team_status(db, monkeypatch):
+    """get_team_status() returns all sender statuses for a room."""
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+
+    monkeypatch.setenv("CHATNUT_OPEN_BROWSER", "0")
+
+    svc = ChatService(db)
+    original = mcp_module._service_factory
+    mcp_module.set_service_factory(lambda: svc)
+    try:
+        room = mcp_module.init_room("test-proj", "team-status-room")
+        room_id = room["id"]
+        mcp_module.update_status(room_id, "agent-1", "idle")
+        mcp_module.update_status(room_id, "agent-2", "done")
+        result = mcp_module.get_team_status(room_id)
+    finally:
+        mcp_module.set_service_factory(original)
+
+    assert "statuses" in result
+    statuses = result["statuses"]
+    assert len(statuses) == 2
+    senders = {s["sender"] for s in statuses}
+    assert senders == {"agent-1", "agent-2"}

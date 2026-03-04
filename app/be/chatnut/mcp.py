@@ -1,6 +1,8 @@
 """FastMCP tool definitions — thin wrappers over ChatService."""
 
 import asyncio
+import json
+import logging
 import os
 from collections import defaultdict
 from collections.abc import Callable
@@ -11,6 +13,8 @@ from fastmcp import FastMCP
 
 from chatnut.service import ChatService
 from chatnut.version_check import get_cached_version_info
+
+logger = logging.getLogger(__name__)
 
 mcp = FastMCP("agents-chat")
 
@@ -58,6 +62,46 @@ def _get_web_base_url() -> str | None:
         return None
 
 
+def _write_team_chatroom(team_name: str, room_data: dict) -> None:
+    """Write chatroom.json to the team config directory.
+
+    Sanitizes team_name with os.path.basename() to prevent path traversal.
+    Silently returns if the team directory does not exist.
+    File write failures are logged as warnings and are non-fatal.
+
+    Args:
+        team_name: The team name (directory under CLAUDE_TEAMS_DIR).
+        room_data: The room dict returned by init_room (may include web_url).
+    """
+    # Sanitize to prevent path traversal (e.g. "../../etc")
+    safe_name = os.path.basename(team_name)
+    if not safe_name or safe_name != team_name:
+        logger.warning(
+            "init_room: team_name %r rejected (path traversal attempt or empty after sanitization)",
+            team_name,
+        )
+        return
+
+    teams_dir = Path(os.environ.get("CLAUDE_TEAMS_DIR", Path.home() / ".claude" / "teams"))
+    team_dir = teams_dir / safe_name
+
+    if not team_dir.exists():
+        return
+
+    chatroom_data: dict = {
+        "room_id": room_data.get("id"),
+        "project": room_data.get("project"),
+        "name": room_data.get("name"),
+    }
+    if "web_url" in room_data:
+        chatroom_data["web_url"] = room_data["web_url"]
+
+    try:
+        (team_dir / "chatroom.json").write_text(json.dumps(chatroom_data, indent=2))
+    except OSError as exc:
+        logger.warning("init_room: failed to write chatroom.json for team %r: %s", team_name, exc)
+
+
 def _notify_waiters(room_id: str) -> None:
     """Wake up all wait_for_messages callers blocked on room_id.
 
@@ -102,12 +146,17 @@ def init_room(
     name: str,
     branch: str | None = None,
     description: str | None = None,
+    team_name: str | None = None,
 ) -> dict:
     """Create a new chatroom. Idempotent — returns existing room if already created.
 
     Automatically opens the chatroom in the user's browser when the server is running.
     The response includes a `web_url` field with the direct link.
     Set CHATNUT_OPEN_BROWSER=0 to suppress auto-open (e.g. in CI/tests).
+
+    When team_name is provided, writes chatroom.json to the team config directory
+    (~/.claude/teams/<team_name>/chatroom.json or CLAUDE_TEAMS_DIR/<team_name>/chatroom.json).
+    Non-fatal: file write failures are logged as warnings.
     """
     result = _get_service().init_room(project, name, branch=branch, description=description)
     web_url = _get_web_base_url()
@@ -117,6 +166,8 @@ def init_room(
         if os.environ.get("CHATNUT_OPEN_BROWSER", "1") != "0":
             import webbrowser
             webbrowser.open(room_url)
+    if team_name is not None:
+        _write_team_chatroom(team_name, result)
     return result
 
 
@@ -304,3 +355,34 @@ def mark_read(
 ) -> dict:
     """Mark messages as read up to the given message ID for a reader. Cursor only moves forward."""
     return _get_service().mark_read(room_id, reader, last_read_message_id)
+
+
+@mcp.tool()
+def update_status(room_id: str, sender: str, status: str) -> dict:
+    """Set or update a sender's status in a room.
+
+    Args:
+        room_id: The room UUID returned by init_room.
+        sender: Name or identifier of the agent updating their status.
+        status: Status string (e.g. 'idle', 'working', 'done').
+
+    Raises:
+        ValueError: If the room does not exist or is archived.
+    """
+    return _get_service().update_status(room_id, sender, status)
+
+
+@mcp.tool()
+def get_team_status(room_id: str) -> dict:
+    """Get all current statuses for all senders in a room.
+
+    Args:
+        room_id: The room UUID returned by init_room.
+
+    Returns:
+        {"statuses": [...]} — list of {room_id, sender, status, updated_at} dicts.
+
+    Raises:
+        ValueError: If the room does not exist.
+    """
+    return _get_service().get_team_status(room_id)

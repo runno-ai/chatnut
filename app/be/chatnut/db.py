@@ -141,6 +141,7 @@ def delete_room(conn: sqlite3.Connection, room_id: str) -> int:
         msg_cursor = conn.execute("DELETE FROM messages WHERE room_id=?", (room_id,))
         msg_count = msg_cursor.rowcount
         delete_read_cursors(conn, room_id)
+        delete_room_statuses(conn, room_id)
         conn.execute("DELETE FROM rooms WHERE id=?", (room_id,))
     return msg_count
 
@@ -381,6 +382,45 @@ def delete_read_cursors(conn: sqlite3.Connection, room_id: str) -> None:
     """Delete all read cursors for a room. Used by delete_room and clear_room."""
     with conn:
         conn.execute("DELETE FROM read_cursors WHERE room_id = ?", (room_id,))
+
+
+def upsert_room_status(
+    conn: sqlite3.Connection,
+    room_id: str,
+    sender: str,
+    status: str,
+) -> dict:
+    """Upsert a sender's status in a room. Returns the status record."""
+    now = _now()
+    with conn:
+        conn.execute(
+            """
+            INSERT INTO room_status (room_id, sender, status, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(room_id, sender) DO UPDATE
+            SET status = excluded.status, updated_at = excluded.updated_at
+            """,
+            (room_id, sender, status, now),
+        )
+    return {"room_id": room_id, "sender": sender, "status": status, "updated_at": now}
+
+
+def get_room_statuses(conn: sqlite3.Connection, room_id: str) -> list[dict]:
+    """Get all current statuses for a room."""
+    rows = conn.execute(
+        "SELECT room_id, sender, status, updated_at FROM room_status WHERE room_id = ? ORDER BY updated_at DESC, sender ASC",
+        (room_id,),
+    ).fetchall()
+    return [
+        {"room_id": r[0], "sender": r[1], "status": r[2], "updated_at": r[3]}
+        for r in rows
+    ]
+
+
+def delete_room_statuses(conn: sqlite3.Connection, room_id: str) -> None:
+    """Delete all statuses for a room."""
+    with conn:
+        conn.execute("DELETE FROM room_status WHERE room_id = ?", (room_id,))
 
 
 def search_rooms_and_messages(
