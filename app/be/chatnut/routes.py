@@ -63,6 +63,40 @@ async def message_event_generator(
         await anyio.sleep(POLL_INTERVAL)
 
 
+async def status_event_generator(
+    svc: ChatService,
+    room_id: str,
+    is_disconnected: Callable[[], Awaitable[bool]] | None = None,
+) -> AsyncIterator[dict]:
+    """Async generator for SSE room status events.
+
+    Polls for status changes and yields new data when the hash changes.
+    DB calls are offloaded to a thread to avoid blocking the event loop.
+    """
+    last_hash = ""
+    keepalive_counter = 0
+    while True:
+        if is_disconnected and await is_disconnected():
+            break
+
+        statuses = await anyio.to_thread.run_sync(
+            lambda: svc.get_team_status(room_id)
+        )
+        payload = json.dumps({"statuses": statuses}, sort_keys=True)
+        content_hash = hashlib.sha256(payload.encode()).hexdigest()
+        if content_hash != last_hash:
+            last_hash = content_hash
+            keepalive_counter = 0
+            yield {"data": payload}
+        else:
+            keepalive_counter += 1
+            if keepalive_counter >= int(KEEPALIVE_INTERVAL / POLL_INTERVAL):
+                keepalive_counter = 0
+                yield {"comment": "keepalive"}
+
+        await anyio.sleep(POLL_INTERVAL)
+
+
 async def chatroom_event_generator(
     svc: ChatService,
     project: str | None = None,
@@ -187,6 +221,33 @@ def create_router(get_service: Callable[[], ChatService]) -> APIRouter:
             return get_service().search(q, project=project)
         except ValueError as e:
             raise HTTPException(status_code=422, detail=str(e)) from e
+
+    @router.get("/chatrooms/{room_id}/status")
+    async def room_status(room_id: str):
+        svc = get_service()
+        try:
+            statuses = await anyio.to_thread.run_sync(
+                lambda: svc.get_team_status(room_id)
+            )
+            return {"statuses": statuses}
+        except ValueError as e:
+            msg = str(e)
+            status_code = 404 if "not found" in msg else 422
+            raise HTTPException(status_code=status_code, detail=msg) from e
+
+    @router.get("/stream/status")
+    async def stream_status(
+        request: Request,
+        room_id: str = Query(...),
+    ):
+        svc = get_service()
+        if not await anyio.to_thread.run_sync(lambda: svc.room_exists(room_id)):
+            raise HTTPException(status_code=404, detail=f"Room '{room_id}' not found")
+        gen = status_event_generator(
+            svc, room_id,
+            is_disconnected=request.is_disconnected,
+        )
+        return EventSourceResponse(gen)
 
     @router.get("/stream/chatrooms")
     async def stream_chatrooms(

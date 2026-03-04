@@ -494,3 +494,89 @@ def test_status_no_update(client):
     data = resp.json()
     assert data["version"] == "0.3.0"
     assert "latest" not in data
+
+
+# --- Task 5: REST + SSE endpoints for room status ---
+
+
+def test_get_room_status(client, svc):
+    """GET /api/chatrooms/{room_id}/status returns statuses for the room."""
+    room = svc.init_room("proj", "dev")
+    room_id = room["id"]
+    svc.update_status(room_id, "alice", "working on auth")
+    svc.update_status(room_id, "bob", "reviewing PR")
+    resp = client.get(f"/api/chatrooms/{room_id}/status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "statuses" in data
+    assert len(data["statuses"]) == 2
+    senders = {s["sender"] for s in data["statuses"]}
+    assert senders == {"alice", "bob"}
+
+
+def test_get_room_status_nonexistent(client):
+    """GET /api/chatrooms/{room_id}/status returns 404 for unknown room."""
+    resp = client.get("/api/chatrooms/nonexistent-room-id/status")
+    assert resp.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_status_event_generator_emits_on_change(db):
+    """SSE status generator emits when status changes, deduplicates unchanged."""
+    from chatnut.routes import status_event_generator
+
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    room_id = room["id"]
+
+    poll_count = 0
+
+    async def disconnect_after_two_polls():
+        nonlocal poll_count
+        poll_count += 1
+        return poll_count > 2
+
+    # No statuses yet — first emission should still emit (new hash)
+    events = []
+    async for event in status_event_generator(
+        svc, room_id, is_disconnected=disconnect_after_two_polls
+    ):
+        events.append(event)
+
+    # First iteration emits data (new hash), second iteration does not (same hash)
+    data_events = [e for e in events if "data" in e]
+    assert len(data_events) == 1
+    payload = json.loads(data_events[0]["data"])
+    assert "statuses" in payload
+    assert payload["statuses"] == []
+
+
+@pytest.mark.anyio
+async def test_status_event_generator_emits_on_status_update(db):
+    """SSE status generator detects new statuses and emits updated data."""
+    from chatnut.routes import status_event_generator
+
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    room_id = room["id"]
+    svc.update_status(room_id, "alice", "working")
+
+    call_count = 0
+
+    async def disconnect_after_first():
+        nonlocal call_count
+        call_count += 1
+        return call_count > 1
+
+    events = []
+    async for event in status_event_generator(
+        svc, room_id, is_disconnected=disconnect_after_first
+    ):
+        events.append(event)
+
+    data_events = [e for e in events if "data" in e]
+    assert len(data_events) == 1
+    payload = json.loads(data_events[0]["data"])
+    assert len(payload["statuses"]) == 1
+    assert payload["statuses"][0]["sender"] == "alice"
+    assert payload["statuses"][0]["status"] == "working"
