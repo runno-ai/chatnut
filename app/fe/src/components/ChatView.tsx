@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Message } from "./Message";
 import { ConnectionStatus } from "./ConnectionStatus";
+import { StatusBar } from "./StatusBar";
 import { useSSE } from "../hooks/useSSE";
+import { useStatus } from "../hooks/useStatus";
 import type { ChatMessage } from "../types";
 
 interface ChatViewProps {
@@ -19,6 +21,7 @@ export function ChatView({ room, roomName, roomBranch, roomProject, isLive, read
   const { messages: liveMessages, connectionStatus } = useSSE(
     isLive ? room : null
   );
+  const statuses = useStatus(isLive ? room : null);
   const [staticMessages, setStaticMessages] = useState<ChatMessage[]>([]);
   const [loadingStatic, setLoadingStatic] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -175,6 +178,9 @@ export function ChatView({ room, roomName, roomBranch, roomProject, isLive, read
           {messages.length} messages
         </span>
       </div>
+
+      {/* Status bar — agent statuses for live rooms */}
+      <StatusBar statuses={statuses} />
 
       {/* Messages */}
       <div
