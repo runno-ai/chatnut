@@ -1,15 +1,14 @@
 // src/hooks/useStatus.ts
 import { useState, useEffect, useRef } from "react";
-import type { RoomStatus, TeamStatusResponse } from "../types";
+import type { RoomStatus } from "../types";
 
 export function useStatus(roomId: string | null): RoomStatus[] {
   const [statuses, setStatuses] = useState<RoomStatus[]>([]);
   const esRef = useRef<EventSource | null>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const closedRef = useRef(false);
 
   useEffect(() => {
-    closedRef.current = false;
+    let closed = false;
 
     if (!roomId) {
       setStatuses([]);
@@ -19,7 +18,7 @@ export function useStatus(roomId: string | null): RoomStatus[] {
     setStatuses([]);
 
     function connect() {
-      if (closedRef.current) return;
+      if (closed) return;
 
       const es = new EventSource(
         `/api/stream/status?room_id=${encodeURIComponent(roomId!)}`
@@ -27,10 +26,12 @@ export function useStatus(roomId: string | null): RoomStatus[] {
       esRef.current = es;
 
       es.onmessage = (event) => {
-        if (closedRef.current) return;
+        if (closed) return;
         try {
-          const data = JSON.parse(event.data) as TeamStatusResponse;
-          setStatuses(data.statuses ?? []);
+          const data = JSON.parse(event.data);
+          if (data && Array.isArray(data.statuses)) {
+            setStatuses(data.statuses);
+          }
         } catch {
           console.warn("useStatus: failed to parse status JSON");
         }
@@ -39,7 +40,7 @@ export function useStatus(roomId: string | null): RoomStatus[] {
       es.onerror = () => {
         es.close();
         esRef.current = null;
-        if (!closedRef.current) {
+        if (!closed) {
           retryRef.current = setTimeout(connect, 3000);
         }
       };
@@ -48,7 +49,7 @@ export function useStatus(roomId: string | null): RoomStatus[] {
     connect();
 
     return () => {
-      closedRef.current = true;
+      closed = true;
       esRef.current?.close();
       esRef.current = null;
       if (retryRef.current) {

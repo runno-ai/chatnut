@@ -1,5 +1,5 @@
 import { render, screen, cleanup } from "@testing-library/react";
-import { describe, it, expect, afterEach, vi, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { StatusBar } from "../StatusBar";
 
 afterEach(() => {

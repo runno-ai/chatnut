@@ -6,21 +6,23 @@ const STALE_MS = 5 * 60 * 1000; // 5 minutes
 
 function isStale(updatedAt: string): boolean {
   try {
-    return Date.now() - new Date(updatedAt).getTime() > STALE_MS;
+    const ts = new Date(updatedAt).getTime();
+    if (Number.isNaN(ts)) return true;
+    return Date.now() - ts > STALE_MS;
   } catch {
-    return false;
+    return true;
   }
 }
 
 function statusColor(status: string, updatedAt: string): string {
-  if (/block/i.test(status)) return "text-yellow-500";
   if (isStale(updatedAt)) return "text-gray-500";
+  if (/block/i.test(status)) return "text-yellow-500";
   return "text-green-400";
 }
 
 function dotColor(status: string, updatedAt: string): string {
-  if (/block/i.test(status)) return "bg-yellow-500";
   if (isStale(updatedAt)) return "bg-gray-500";
+  if (/block/i.test(status)) return "bg-yellow-500";
   return "bg-green-400";
 }
 

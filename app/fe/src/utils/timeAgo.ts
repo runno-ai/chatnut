@@ -6,7 +6,7 @@
 export function timeAgo(dateStr: string): string {
   try {
     const date = new Date(dateStr);
-    const diffMs = Date.now() - date.getTime();
+    const diffMs = Math.max(0, Date.now() - date.getTime());
     const diffSec = Math.floor(diffMs / 1000);
     const diffMin = Math.floor(diffMs / 60000);
     const diffHr = Math.floor(diffMs / 3600000);
