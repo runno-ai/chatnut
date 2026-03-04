@@ -10,6 +10,7 @@ from chatnut.db import (
     list_rooms,
     list_projects,
     archive_room,
+    delete_room,
     insert_message,
     get_messages,
     delete_messages,
@@ -18,6 +19,8 @@ from chatnut.db import (
     upsert_read_cursor,
     get_read_cursor,
     get_unread_counts,
+    upsert_room_status,
+    get_room_statuses,
 )
 
 
@@ -442,3 +445,69 @@ def test_cross_room_cursor_isolation(db):
     counts = get_unread_counts(db, [room_a.id, room_b.id], "bob")
     assert counts[room_a.id] == 0
     assert counts[room_b.id] == 1
+
+
+# --- Room status tests ---
+
+
+def test_room_status_table_exists(db):
+    """Verify room_status table is created by migrations."""
+    cursor = db.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='room_status'"
+    )
+    assert cursor.fetchone() is not None
+
+
+def test_room_status_upsert(db):
+    """Verify UPSERT semantics on room_status."""
+    room = create_room(db, "test-project", "test-room")
+    room_id = room.id
+
+    # First insert
+    upsert_room_status(db, room_id, "reviewer-1", "Reviewing auth module")
+    statuses = get_room_statuses(db, room_id)
+    assert len(statuses) == 1
+    assert statuses[0]["sender"] == "reviewer-1"
+    assert statuses[0]["status"] == "Reviewing auth module"
+
+    # Update (UPSERT)
+    upsert_room_status(db, room_id, "reviewer-1", "Completed review")
+    statuses = get_room_statuses(db, room_id)
+    assert len(statuses) == 1
+    assert statuses[0]["status"] == "Completed review"
+
+    # Second sender
+    upsert_room_status(db, room_id, "codex", "Running analysis")
+    statuses = get_room_statuses(db, room_id)
+    assert len(statuses) == 2
+
+
+def test_room_status_cascade_delete(db):
+    """Verify statuses are deleted when room is deleted via db.delete_room()."""
+    room = create_room(db, "test-project", "test-room")
+    room_id = room.id
+    upsert_room_status(db, room_id, "reviewer-1", "Working")
+
+    # Archive then delete via db function
+    db.execute(
+        "UPDATE rooms SET status='archived', archived_at=datetime('now') WHERE id=?",
+        (room_id,),
+    )
+    db.commit()
+    delete_room(db, room_id)
+
+    statuses = get_room_statuses(db, room_id)
+    assert len(statuses) == 0
+
+
+def test_room_status_length_constraint(db):
+    """Verify status text length is capped at 500 chars."""
+    room = create_room(db, "test-project", "test-room")
+    room_id = room.id
+
+    # 500 chars should succeed
+    upsert_room_status(db, room_id, "agent", "x" * 500)
+
+    # 501 chars should fail
+    with pytest.raises(sqlite3.IntegrityError):
+        upsert_room_status(db, room_id, "agent", "x" * 501)
