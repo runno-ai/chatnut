@@ -14,6 +14,7 @@ async def test_all_tools_registered():
         "ping", "init_room", "post_message", "read_messages",
         "list_rooms", "archive_room", "delete_room", "clear_room",
         "search", "list_projects", "mark_read", "wait_for_messages",
+        "update_status", "get_team_status",
     }
     assert expected.issubset(tool_names), f"Missing tools: {expected - tool_names}"
 
@@ -311,3 +312,52 @@ def test_init_room_rejects_path_traversal(db, tmp_path, monkeypatch):
 
     # Also verify nothing was written at /etc/chatroom.json (or wherever traversal points)
     # The sanitized name "etc" would differ from "../../etc", so it's rejected before any write
+
+
+def test_mcp_update_status(db, monkeypatch):
+    """update_status() sets a sender's status in a room and returns the status record."""
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+
+    monkeypatch.setenv("CHATNUT_OPEN_BROWSER", "0")
+
+    svc = ChatService(db)
+    original = mcp_module._service_factory
+    mcp_module.set_service_factory(lambda: svc)
+    try:
+        room = mcp_module.init_room("test-proj", "status-room")
+        room_id = room["id"]
+        result = mcp_module.update_status(room_id, "agent-1", "working")
+    finally:
+        mcp_module.set_service_factory(original)
+
+    assert result["room_id"] == room_id
+    assert result["sender"] == "agent-1"
+    assert result["status"] == "working"
+    assert "updated_at" in result
+
+
+def test_mcp_get_team_status(db, monkeypatch):
+    """get_team_status() returns all sender statuses for a room."""
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+
+    monkeypatch.setenv("CHATNUT_OPEN_BROWSER", "0")
+
+    svc = ChatService(db)
+    original = mcp_module._service_factory
+    mcp_module.set_service_factory(lambda: svc)
+    try:
+        room = mcp_module.init_room("test-proj", "team-status-room")
+        room_id = room["id"]
+        mcp_module.update_status(room_id, "agent-1", "idle")
+        mcp_module.update_status(room_id, "agent-2", "done")
+        result = mcp_module.get_team_status(room_id)
+    finally:
+        mcp_module.set_service_factory(original)
+
+    assert "statuses" in result
+    statuses = result["statuses"]
+    assert len(statuses) == 2
+    senders = {s["sender"] for s in statuses}
+    assert senders == {"agent-1", "agent-2"}

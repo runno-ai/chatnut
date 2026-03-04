@@ -355,3 +355,35 @@ def mark_read(
 ) -> dict:
     """Mark messages as read up to the given message ID for a reader. Cursor only moves forward."""
     return _get_service().mark_read(room_id, reader, last_read_message_id)
+
+
+@mcp.tool()
+def update_status(room_id: str, sender: str, status: str) -> dict:
+    """Set or update a sender's status in a room.
+
+    Args:
+        room_id: The room UUID returned by init_room.
+        sender: Name or identifier of the agent updating their status.
+        status: Status string (e.g. 'idle', 'working', 'done').
+
+    Raises:
+        ValueError: If the room does not exist or is archived.
+    """
+    return _get_service().update_status(room_id, sender, status)
+
+
+@mcp.tool()
+def get_team_status(room_id: str) -> dict:
+    """Get all current statuses for all senders in a room.
+
+    Args:
+        room_id: The room UUID returned by init_room.
+
+    Returns:
+        {"statuses": [...]} — list of {room_id, sender, status, updated_at} dicts.
+
+    Raises:
+        ValueError: If the room does not exist.
+    """
+    statuses = _get_service().get_team_status(room_id)
+    return {"statuses": statuses}
