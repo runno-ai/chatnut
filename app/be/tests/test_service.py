@@ -620,3 +620,31 @@ def test_get_team_status_nonexistent_room(db):
     svc = ChatService(db)
     with pytest.raises(ValueError, match="not found"):
         svc.get_team_status("nonexistent-room-id")
+
+
+def test_update_status_empty_sender(db):
+    """update_status rejects empty sender string."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    with pytest.raises(ValueError, match="sender must be a non-empty"):
+        svc.update_status(room["id"], "", "working")
+    with pytest.raises(ValueError, match="sender must be a non-empty"):
+        svc.update_status(room["id"], "   ", "working")
+
+
+def test_update_status_empty_status(db):
+    """update_status rejects empty status string."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    with pytest.raises(ValueError, match="status must be a non-empty"):
+        svc.update_status(room["id"], "alice", "")
+    with pytest.raises(ValueError, match="status must be a non-empty"):
+        svc.update_status(room["id"], "alice", "   ")
+
+
+def test_update_status_too_long(db):
+    """update_status rejects status longer than 500 characters."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    with pytest.raises(ValueError, match="500 characters"):
+        svc.update_status(room["id"], "alice", "x" * 501)

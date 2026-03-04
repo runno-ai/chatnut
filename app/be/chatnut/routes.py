@@ -79,9 +79,12 @@ async def status_event_generator(
         if is_disconnected and await is_disconnected():
             break
 
-        statuses = await anyio.to_thread.run_sync(
-            lambda: svc.get_team_status(room_id)
-        )
+        try:
+            statuses = await anyio.to_thread.run_sync(
+                lambda: svc.get_team_status(room_id)
+            )
+        except ValueError:
+            break
         payload = json.dumps({"statuses": statuses}, sort_keys=True)
         content_hash = hashlib.sha256(payload.encode()).hexdigest()
         if content_hash != last_hash:
@@ -223,12 +226,10 @@ def create_router(get_service: Callable[[], ChatService]) -> APIRouter:
             raise HTTPException(status_code=422, detail=str(e)) from e
 
     @router.get("/chatrooms/{room_id}/status")
-    async def room_status(room_id: str):
+    def room_status(room_id: str):
         svc = get_service()
         try:
-            statuses = await anyio.to_thread.run_sync(
-                lambda: svc.get_team_status(room_id)
-            )
+            statuses = svc.get_team_status(room_id)
             return {"statuses": statuses}
         except ValueError as e:
             msg = str(e)

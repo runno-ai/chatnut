@@ -408,7 +408,7 @@ def upsert_room_status(
 def get_room_statuses(conn: sqlite3.Connection, room_id: str) -> list[dict]:
     """Get all current statuses for a room."""
     rows = conn.execute(
-        "SELECT room_id, sender, status, updated_at FROM room_status WHERE room_id = ? ORDER BY updated_at DESC",
+        "SELECT room_id, sender, status, updated_at FROM room_status WHERE room_id = ? ORDER BY updated_at DESC, sender ASC",
         (room_id,),
     ).fetchall()
     return [
