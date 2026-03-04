@@ -144,7 +144,7 @@ Tools and routes never touch the DB directly. Tests instantiate `ChatService` wi
 | Tool | Signature | Purpose |
 |------|-----------|---------|
 | `ping` | `()` | Health check (DB path, version info, `web_url` if server running) |
-| `init_room` | `(project, name, branch?, description?)` | Create a chatroom (idempotent); auto-opens browser via `web_url` |
+| `init_room` | `(project, name, branch?, description?, team_name?)` | Create a chatroom (idempotent); auto-opens browser via `web_url`; writes chatroom.json to `~/.claude/teams/{team_name}/` when team_name provided |
 | `post_message` | `(room_id, sender, content, message_type?)` | Post a message by room_id |
 | `read_messages` | `(room_id, since_id?, limit?, message_type?)` | Read messages by room_id |
 | `wait_for_messages` | `(room_id, since_id, timeout?, limit?, message_type?)` | Block until new messages arrive (long-poll, max 60s); returns `timed_out=True` on timeout |
@@ -155,6 +155,8 @@ Tools and routes never touch the DB directly. Tests instantiate `ChatService` wi
 | `clear_room` | `(project, name)` | Delete all messages in a room |
 | `mark_read` | `(room_id, reader, last_read_message_id)` | Mark messages as read (cursor only moves forward) |
 | `search` | `(query, project?)` | Search room names + message content |
+| `update_status` | `(room_id, sender, status)` | Update a sender's status in a room (UPSERT, max 500 chars) |
+| `get_team_status` | `(room_id)` | Get current status of all team members |
 
 ## SKILL.md
 
@@ -173,6 +175,8 @@ The in-repo `SKILL.md` documents all MCP tools, their signatures, and usage patt
 | `GET /api/search` | REST | Search rooms + messages (?q, ?project) |
 | `GET /api/stream/chatrooms` | SSE | Room list updates (real-time, `?reader=` for unread counts) |
 | `GET /api/stream/messages` | SSE | Message stream (?room_id, honors Last-Event-Id) |
+| `GET /api/chatrooms/{room_id}/status` | REST | Current team status for a room |
+| `GET /api/stream/status` | SSE | Status changes (room_id param, polling + hash dedup) |
 
 ## Schema
 
@@ -207,6 +211,14 @@ CREATE TABLE IF NOT EXISTS read_cursors (
     last_read_message_id INTEGER NOT NULL DEFAULT 0 CHECK(last_read_message_id >= 0),
     updated_at TEXT NOT NULL,
     PRIMARY KEY (room_id, reader)
+);
+
+CREATE TABLE IF NOT EXISTS room_status (
+    room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+    sender TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(length(status) <= 500),
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (room_id, sender)
 );
 ```
 
@@ -261,6 +273,7 @@ Uses PyPI OIDC Trusted Publishing (no stored secrets). See [RELEASING.md](RELEAS
 - **`wait_for_messages` for agent blocking** — asyncio.Queue per waiter; `post_message` notifies via `call_soon_threadsafe(_wake_all)` (all `_waiters` access event-loop-only); zero DB reads while waiting; agents call once instead of polling in a loop; timeout capped at 60s
 - **Auto-open browser on `init_room`** — `init_room` reads `server.port` file, constructs `web_url`, and calls `webbrowser.open()` automatically; suppressed via `CHATNUT_OPEN_BROWSER=0` in tests/CI; `conftest.py` has autouse `_suppress_browser` fixture
 - **Update notification via GitHub releases API** — `version_check.py` fetches latest release tag from GitHub with 1hr in-memory TTL cache; `get_version_info()` (async) populates cache, `get_cached_version_info()` (sync) reads it without I/O; three consumers: startup log warning, `ping()` tool, `/api/status` endpoint; frontend `useVersion` hook fetches `/api/status` on load and shows a dismissible amber banner
+- **Decoupled status system** — `room_status` table is separate from `messages`; UPSERT semantics (one row per sender per room); frontend shows as sticky StatusBar above messages, not inline; polling-based SSE endpoint consistent with existing chatroom stream
 
 ## E2E Testing Patterns
 

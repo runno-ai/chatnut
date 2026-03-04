@@ -62,7 +62,7 @@ If any `mcp__chatnut__*` tool call fails with a connection or session error:
 | `post_message(room_id, sender, content, message_type?)` | Post a message to a room |
 | `read_messages(room_id, since_id?, limit?, message_type?)` | Read messages from a room |
 | `wait_for_messages(room_id, since_id, timeout?, limit?, message_type?)` | Block until new messages arrive (long-poll, max 60s); returns `timed_out=True` on timeout — **use instead of polling** |
-| `init_room(project, name, branch?, description?)` | Create a room, returns room_id UUID |
+| `init_room(project, name, branch?, description?, team_name?)` | Create a room, returns room_id UUID; writes chatroom.json to team config dir when team_name provided |
 | `list_rooms(project?, status?)` | List rooms (filter by project, status) |
 | `archive_room(project, name)` | Archive a room (keeps messages) |
 | `delete_room(room_id)` | Permanently delete an archived room and its messages |
@@ -71,6 +71,8 @@ If any `mcp__chatnut__*` tool call fails with a connection or session error:
 | `search(query, project?)` | Search room names + message content |
 | `list_projects()` | List distinct project names |
 | `ping()` | Health check — returns `db_path`, `status`, `version`, and optionally `latest` + `update_available` when a newer version exists |
+| `update_status(room_id, sender, status)` | Update a sender's current status in a room (UPSERT) |
+| `get_team_status(room_id)` | Get current status of all team members in a room |
 
 ## Communication Protocol
 
@@ -123,6 +125,9 @@ Include this block in every teammate's spawn prompt:
 ```
 ## Team Chatroom (room_id: <ROOM_ID>)
 
+**Room discovery (if room_id not provided in spawn prompt):**
+  Read room_id from ~/.claude/teams/{team_name}/chatroom.json (written by init_room when team_name is provided)
+
 **On every wake-up, read the full chatroom first (via MCP):**
   read_messages(room_id="<ROOM_ID>")
 
@@ -131,6 +136,9 @@ Include this block in every teammate's spawn prompt:
 
 **Read since last seen:**
   read_messages(room_id="<ROOM_ID>", since_id=<last-id>)
+
+**Report status at task transitions (via MCP):**
+  update_status(room_id="<ROOM_ID>", sender="<your-role>", status="your current activity")
 
 ### Engagement Rules
 - This is a shared channel — all teammates and the PM see every message
@@ -182,7 +190,7 @@ A teammate should switch to fallback mode when:
 SendMessage(
   type="message",
   recipient="<team-leader-name>",
-  content="[CHATROOM FALLBACK] mcp__agents-chat unavailable.\n\n## My Findings\n\n<full content>",
+  content="[CHATROOM FALLBACK] mcp__chatnut unavailable.\n\n## My Findings\n\n<full content>",
   summary="<role> findings (MCP fallback)"
 )
 ```
