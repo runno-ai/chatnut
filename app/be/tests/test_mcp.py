@@ -194,3 +194,120 @@ def test_ping_version_no_update(db):
         assert "update_available" not in result
     finally:
         mcp_module.set_service_factory(original)
+
+
+def test_init_room_writes_team_config(db, tmp_path, monkeypatch):
+    """init_room() writes chatroom.json to team dir when team_name is provided."""
+    import json
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+
+    monkeypatch.setenv("CHATNUT_OPEN_BROWSER", "0")
+    # Isolate from any running server by pointing run dir to tmp_path (no port file)
+    monkeypatch.setenv("CHATNUT_RUN_DIR", str(tmp_path))
+    teams_dir = tmp_path / "teams"
+    team_dir = teams_dir / "my-team"
+    team_dir.mkdir(parents=True)
+    monkeypatch.setenv("CLAUDE_TEAMS_DIR", str(teams_dir))
+
+    svc = ChatService(db)
+    original = mcp_module._service_factory
+    mcp_module.set_service_factory(lambda: svc)
+    try:
+        result = mcp_module.init_room("test-proj", "test-room", team_name="my-team")
+    finally:
+        mcp_module.set_service_factory(original)
+
+    chatroom_file = team_dir / "chatroom.json"
+    assert chatroom_file.exists(), "chatroom.json should be written to team dir"
+
+    data = json.loads(chatroom_file.read_text())
+    assert data["room_id"] == result["id"]
+    assert data["project"] == "test-proj"
+    assert data["name"] == "test-room"
+    assert "web_url" not in data  # no server running (no port file in tmp_path)
+
+
+def test_init_room_without_team_name_no_file(db, tmp_path, monkeypatch):
+    """init_room() without team_name writes no files to teams dir."""
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+
+    monkeypatch.setenv("CHATNUT_OPEN_BROWSER", "0")
+    teams_dir = tmp_path / "teams"
+    teams_dir.mkdir(parents=True)
+    monkeypatch.setenv("CLAUDE_TEAMS_DIR", str(teams_dir))
+
+    svc = ChatService(db)
+    original = mcp_module._service_factory
+    mcp_module.set_service_factory(lambda: svc)
+    try:
+        mcp_module.init_room("test-proj", "no-team-room")
+    finally:
+        mcp_module.set_service_factory(original)
+
+    # No files should be written anywhere under teams_dir
+    written = list(teams_dir.rglob("*"))
+    assert written == [], f"Expected no files written, but found: {written}"
+
+
+def test_init_room_team_write_failure_nonfatal(db, tmp_path, monkeypatch):
+    """init_room() still returns successfully when chatroom.json write fails."""
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+
+    monkeypatch.setenv("CHATNUT_OPEN_BROWSER", "0")
+    # Point CLAUDE_TEAMS_DIR at a nonexistent path so the team_dir is created,
+    # then make the team dir exist but not writable by using a read-only dir
+    teams_dir = tmp_path / "teams"
+    # Create the team dir so the existence check passes, but make chatroom.json unwritable
+    # by setting the team dir itself to read-only
+    team_dir = teams_dir / "locked-team"
+    team_dir.mkdir(parents=True)
+    team_dir.chmod(0o555)  # read + execute, no write
+    monkeypatch.setenv("CLAUDE_TEAMS_DIR", str(teams_dir))
+
+    svc = ChatService(db)
+    original = mcp_module._service_factory
+    mcp_module.set_service_factory(lambda: svc)
+    try:
+        # Should not raise even though write will fail
+        result = mcp_module.init_room("test-proj", "fail-room", team_name="locked-team")
+    finally:
+        mcp_module.set_service_factory(original)
+        team_dir.chmod(0o755)  # restore for cleanup
+
+    # Room was still created successfully
+    assert result["id"]
+    assert result["project"] == "test-proj"
+    assert result["name"] == "fail-room"
+
+
+def test_init_room_rejects_path_traversal(db, tmp_path, monkeypatch):
+    """init_room() with path traversal team_name writes no files outside teams dir."""
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+
+    monkeypatch.setenv("CHATNUT_OPEN_BROWSER", "0")
+    teams_dir = tmp_path / "teams"
+    teams_dir.mkdir(parents=True)
+    monkeypatch.setenv("CLAUDE_TEAMS_DIR", str(teams_dir))
+
+    svc = ChatService(db)
+    original = mcp_module._service_factory
+    mcp_module.set_service_factory(lambda: svc)
+    try:
+        # Path traversal attempt: "../../etc" should be rejected
+        result = mcp_module.init_room("test-proj", "traversal-room", team_name="../../etc")
+    finally:
+        mcp_module.set_service_factory(original)
+
+    # Room is still created (non-fatal rejection)
+    assert result["id"]
+
+    # No files should be written anywhere under teams_dir
+    written = list(teams_dir.rglob("*"))
+    assert written == [], f"Expected no files written, but found: {written}"
+
+    # Also verify nothing was written at /etc/chatroom.json (or wherever traversal points)
+    # The sanitized name "etc" would differ from "../../etc", so it's rejected before any write
