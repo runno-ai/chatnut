@@ -1,9 +1,10 @@
 """CLI entry point for chatnut.
 
 Usage:
-    chatnut              # stdio mode (default) — proxy to HTTP server
-    chatnut serve        # run HTTP server in foreground
-    chatnut open [room]  # open web UI in browser
+    chatnut                # stdio mode (default) — proxy to HTTP server
+    chatnut serve          # run HTTP server in foreground
+    chatnut open [room]    # open web UI in browser
+    chatnut install        # install Claude Code skill + protocol rules
 """
 import argparse
 import atexit
@@ -161,6 +162,44 @@ def cmd_open(args: argparse.Namespace) -> None:
         webbrowser.open(url)
 
 
+def cmd_install(args: argparse.Namespace) -> None:
+    """Post-install setup: register MCP, install skill and protocol rules."""
+    import shutil
+
+    pkg = Path(__file__).resolve().parent
+
+    # 1. Register MCP with Claude Code (idempotent)
+    chatnut_bin = shutil.which("chatnut") or sys.executable.replace("python", "chatnut")
+    if shutil.which("claude"):
+        result = subprocess.run(
+            ["claude", "mcp", "add", "chatnut", "--", chatnut_bin],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            print(f"  MCP:   registered (chatnut -> {chatnut_bin})")
+        else:
+            print(f"  MCP:   already registered or failed ({result.stderr.strip()})")
+    else:
+        print("  MCP:   claude CLI not found — add manually to ~/.claude.json")
+
+    # 2. Install protocol rules to ~/.claude/rules/
+    rules_src = pkg / "rules"
+    rules_dst = Path.home() / ".claude" / "rules"
+    rules_dst.mkdir(parents=True, exist_ok=True)
+    for rule_file in rules_src.glob("*.md"):
+        dst = rules_dst / rule_file.name
+        shutil.copy2(rule_file, dst)
+        print(f"  Rule:  {dst}")
+
+    # 3. Install SKILL.md to ~/.claude/skills/chatnut/
+    skill_src = pkg / "skill" / "SKILL.md"
+    skill_dst = Path.home() / ".claude" / "skills" / "chatnut"
+    skill_dst.mkdir(parents=True, exist_ok=True)
+    if skill_src.exists():
+        shutil.copy2(skill_src, skill_dst / "SKILL.md")
+        print(f"  Skill: {skill_dst / 'SKILL.md'}")
+
+
 def cmd_stdio(args: argparse.Namespace) -> None:
     """Run as stdio MCP proxy — auto-starts HTTP server if needed."""
     import asyncio
@@ -189,6 +228,9 @@ def main() -> None:
     open_parser.add_argument("room_id", nargs="?", default=None, help="Room UUID to open directly")
     open_parser.add_argument("--url-only", action="store_true", help="Print URL instead of opening browser")
     open_parser.set_defaults(func=cmd_open)
+
+    install_parser = sub.add_parser("install", help="Install Claude Code skill and protocol rules")
+    install_parser.set_defaults(func=cmd_install)
 
     parser.set_defaults(func=cmd_stdio)
 

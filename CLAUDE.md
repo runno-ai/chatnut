@@ -66,6 +66,9 @@ cd app/be && uv sync --extra test
 # Run all backend tests
 cd app/be && uv run pytest -xvs
 
+# Post-install: register MCP, install skill + protocol rules
+chatnut install
+
 # Start server (auto-selects free port, writes PID/port to ~/.chatnut/)
 chatnut serve
 
