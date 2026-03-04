@@ -36,8 +36,9 @@ def _room_uuid(project: str, name: str) -> str:
 # Demo data — curated realistic agent conversations for development and demos.
 # Each message: (sender, content, offset_minutes_ago)
 # Each read_cursor: (reader, message_number_1_indexed)
+# Each status_entry: (sender, status_text)
 # Room fields: name, description, messages, read_cursors
-#   Optional: status ("live" default or "archived"), archived_minutes_ago
+#   Optional: status ("live" default or "archived"), archived_minutes_ago, status_entries
 # ---------------------------------------------------------------------------
 DEMO_DATA = [
     {
@@ -512,6 +513,12 @@ PR created. CI green. Merging.""", 30),
                     ("qa", 10),
                     ("frontend-dev", 11),
                 ],
+                "status_entries": [
+                    ("pm", "Reviewing PR — waiting on CI"),
+                    ("backend-dev", "Fixing ping() stale path in service.py"),
+                    ("qa", "Writing E2E tests for MCP tool execution"),
+                    ("frontend-dev", "Adding type annotations to routes.py"),
+                ],
             },
             # ------------------------------------------------------------------
             # Live planning check-in — sprint 3 scope and technical decisions
@@ -608,6 +615,13 @@ Daily check-ins here. Target: v0.5 tag by end of sprint.""", 55),
                     ("backend-dev", 6),
                     ("frontend-dev", 5),
                     ("qa", 6),
+                ],
+                "status_entries": [
+                    ("pm", "Tracking sprint progress — daily check-in"),
+                    ("architect", "Reviewing read cursor UPSERT pattern"),
+                    ("backend-dev", "Implementing mark_read ChatService method"),
+                    ("frontend-dev", "Adding exponential backoff to useSSE.ts"),
+                    ("qa", "Writing integration tests for forward-only cursor invariant"),
                 ],
             },
         ],
@@ -995,6 +1009,11 @@ Merging.""", 5),
                     ("pm", 9),
                     ("qa", 7),
                 ],
+                "status_entries": [
+                    ("backend-dev", "PR ready — fix: deduplicate SSE messages by ID"),
+                    ("architect", "Approved — LGTM"),
+                    ("qa", "Verifying regression test covers reconnect race"),
+                ],
             },
         ],
     },
@@ -1069,6 +1088,15 @@ def _seed(conn: sqlite3.Connection) -> tuple[int, int]:
                         "VALUES (?, ?, ?, ?)",
                         (room_id, reader, last_read_id, _now()),
                     )
+
+            # Seed team status entries
+            for sender, status_text in room_data.get("status_entries", []):
+                conn.execute(
+                    "INSERT OR REPLACE INTO room_status "
+                    "(room_id, sender, status, updated_at) "
+                    "VALUES (?, ?, ?, ?)",
+                    (room_id, sender, status_text, _now()),
+                )
 
     conn.commit()
     return rooms_inserted, messages_inserted
