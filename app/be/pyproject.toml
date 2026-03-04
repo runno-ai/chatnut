@@ -1,6 +1,6 @@
 [project]
 name = "chatnut"
-version = "0.3.2"
+version = "0.3.3"
 description = "ChatNut — shared chatrooms for AI agent teams"
 authors = [
     { name = "Runno AI", email = "hi@runno.dev" },
