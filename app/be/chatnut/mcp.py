@@ -189,7 +189,9 @@ def post_message(
     Raises:
         ValueError: If the room is archived or does not exist.
     """
-    result = _get_service().post_message_by_room_id(room_id, sender, content, message_type=message_type)
+    svc = _get_service()
+    with svc.lock:
+        result = svc.post_message_by_room_id(room_id, sender, content, message_type=message_type)
     _notify_waiters(room_id)  # only reached on successful insert
     return result
 
@@ -257,11 +259,15 @@ async def wait_for_messages(
     _waiters[room_id].add(q)
     try:
         # Early exit: return immediately if messages already exist after since_id
-        existing = await anyio.to_thread.run_sync(
-            lambda: _get_service().read_messages_by_room_id(
-                room_id, since_id=since_id, limit=limit, message_type=message_type
-            )
-        )
+        svc = _get_service()
+
+        def _read():
+            with svc.lock:
+                return svc.read_messages_by_room_id(
+                    room_id, since_id=since_id, limit=limit, message_type=message_type
+                )
+
+        existing = await anyio.to_thread.run_sync(_read)
         if existing["messages"]:
             existing["timed_out"] = False
             return existing
@@ -276,21 +282,13 @@ async def wait_for_messages(
             # Final re-check: a message may have been posted concurrently with the timeout.
             # This closes the race between anyio's deadline firing and a pending _notify_waiters call,
             # and also handles the case where _loop was None so notifications were not delivered.
-            final = await anyio.to_thread.run_sync(
-                lambda: _get_service().read_messages_by_room_id(
-                    room_id, since_id=since_id, limit=limit, message_type=message_type
-                )
-            )
+            final = await anyio.to_thread.run_sync(_read)
             if final["messages"]:
                 final["timed_out"] = False
                 return final
             return {"messages": [], "has_more": False, "timed_out": True}
 
-        result = await anyio.to_thread.run_sync(
-            lambda: _get_service().read_messages_by_room_id(
-                room_id, since_id=since_id, limit=limit, message_type=message_type
-            )
-        )
+        result = await anyio.to_thread.run_sync(_read)
         result["timed_out"] = False
         return result
     finally:
