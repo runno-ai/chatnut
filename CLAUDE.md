@@ -256,6 +256,54 @@ Requires `CLAUDE_CODE_OAUTH_TOKEN` secret (OAuth token from `claude setup-token`
 
 Uses PyPI OIDC Trusted Publishing (no stored secrets). See [RELEASING.md](RELEASING.md).
 
+## Server Lifecycle
+
+### Startup
+
+`chatnut serve` binds to an auto-selected port, writes `server.pid` and `server.port` to `CHATNUT_RUN_DIR`, and logs to `server.log` in the same directory. The stdio proxy (`chatnut` with no args) calls `_ensure_server()` which auto-starts a background server if none is running, polling the port file for up to 10 seconds.
+
+### Shutdown
+
+SIGTERM/SIGINT triggers a cleanup handler that removes PID/port files and exits. An `atexit` handler provides a fallback. Stale PID files (process dead) are auto-cleaned on the next `_is_server_running()` check.
+
+### Health check
+
+Two-step: PID alive (`os.kill(pid, 0)`) + HTTP `GET /api/status` returns 200.
+
+### Runtime files
+
+| File | Written | Purpose |
+|------|---------|---------|
+| `server.pid` | On startup | Server process ID |
+| `server.port` | After bind | Bound port number |
+| `server.log` | On auto-start | Subprocess stdout/stderr |
+
+## Dev vs Prod
+
+Dev and prod are fully isolated — different DBs, different runtime dirs, different start mechanisms.
+
+|  | Prod | Dev |
+|--|------|-----|
+| **Start** | MCP stdio → `_ensure_server()` | `ss` → portless `chatnut-dev` |
+| **Binary** | Global `chatnut` (PyPI via `uv tool install`) | Project venv (`app/be/.venv/bin/python`) |
+| **DB** | `~/.chatnut/chatnut.db` | `data/dev.db` (committed fixture) |
+| **Run dir** | `~/.chatnut/` | `data/` (via `CHATNUT_RUN_DIR`) |
+| **URL** | `http://127.0.0.1:<auto-port>` | `http://chatnut-dev.localhost:1355` |
+
+Both can run simultaneously without conflict.
+
+### Dev fixture DB
+
+```bash
+# Seed/reset dev DB with demo data (2 projects, 5 rooms, 45 messages)
+cd app/be && uv run python ../../data/seed.py --reset
+
+# Start dev server via portless
+ss  # select chatnut
+```
+
+The dev start script (`~/.claude/skills/chatnut/start-server-dev.sh`) sets `CHAT_DB_PATH`, `CHATNUT_RUN_DIR`, and `STATIC_DIR` to isolate from prod.
+
 ## Design Decisions
 
 - **Single FastAPI process** — MCP + REST + SSE + static serving, one language, shared ChatService
