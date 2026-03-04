@@ -254,31 +254,25 @@ def test_init_room_without_team_name_no_file(db, tmp_path, monkeypatch):
 
 def test_init_room_team_write_failure_nonfatal(db, tmp_path, monkeypatch):
     """init_room() still returns successfully when chatroom.json write fails."""
+    from unittest.mock import patch
     from chatnut import mcp as mcp_module
     from chatnut.service import ChatService
 
     monkeypatch.setenv("CHATNUT_OPEN_BROWSER", "0")
-    # Point CLAUDE_TEAMS_DIR at a nonexistent path so the team_dir is created,
-    # then make the team dir exist but not writable by using a read-only dir
     teams_dir = tmp_path / "teams"
-    # Create the team dir so the existence check passes, but make chatroom.json unwritable
-    # by setting the team dir itself to read-only
     team_dir = teams_dir / "locked-team"
     team_dir.mkdir(parents=True)
-    team_dir.chmod(0o555)  # read + execute, no write
     monkeypatch.setenv("CLAUDE_TEAMS_DIR", str(teams_dir))
 
     svc = ChatService(db)
     original = mcp_module._service_factory
     mcp_module.set_service_factory(lambda: svc)
     try:
-        # Should not raise even though write will fail
-        result = mcp_module.init_room("test-proj", "fail-room", team_name="locked-team")
+        with patch("pathlib.Path.write_text", side_effect=OSError("simulated write failure")):
+            result = mcp_module.init_room("test-proj", "fail-room", team_name="locked-team")
     finally:
         mcp_module.set_service_factory(original)
-        team_dir.chmod(0o755)  # restore for cleanup
 
-    # Room was still created successfully
     assert result["id"]
     assert result["project"] == "test-proj"
     assert result["name"] == "fail-room"
@@ -310,8 +304,9 @@ def test_init_room_rejects_path_traversal(db, tmp_path, monkeypatch):
     written = list(teams_dir.rglob("*"))
     assert written == [], f"Expected no files written, but found: {written}"
 
-    # Also verify nothing was written at /etc/chatroom.json (or wherever traversal points)
-    # The sanitized name "etc" would differ from "../../etc", so it's rejected before any write
+    # Also ensure traversal did not write chatroom.json anywhere else in tmp sandbox
+    escaped_writes = [p for p in tmp_path.rglob("chatroom.json")]
+    assert escaped_writes == [], f"Unexpected escaped writes: {escaped_writes}"
 
 
 def test_mcp_update_status(db, monkeypatch):

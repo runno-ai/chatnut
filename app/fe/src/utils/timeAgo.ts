@@ -6,6 +6,7 @@
 export function timeAgo(dateStr: string): string {
   try {
     const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return dateStr;
     const diffMs = Math.max(0, Date.now() - date.getTime());
     const diffSec = Math.floor(diffMs / 1000);
     const diffMin = Math.floor(diffMs / 60000);

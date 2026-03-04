@@ -144,7 +144,7 @@ Tools and routes never touch the DB directly. Tests instantiate `ChatService` wi
 | Tool | Signature | Purpose |
 |------|-----------|---------|
 | `ping` | `()` | Health check (DB path, version info, `web_url` if server running) |
-| `init_room` | `(project, name, branch?, description?, team_name?)` | Create a chatroom (idempotent); auto-opens browser via `web_url`; writes chatroom.json to `~/.claude/teams/{team_name}/` when team_name provided |
+| `init_room` | `(project, name, branch?, description?, team_name?)` | Create a chatroom (idempotent); auto-opens browser via `web_url`; when `team_name` provided, writes `chatroom.json` to `~/.claude/teams/{team_name}/` (sanitized to prevent path traversal; write failures are non-fatal) |
 | `post_message` | `(room_id, sender, content, message_type?)` | Post a message by room_id |
 | `read_messages` | `(room_id, since_id?, limit?, message_type?)` | Read messages by room_id |
 | `wait_for_messages` | `(room_id, since_id, timeout?, limit?, message_type?)` | Block until new messages arrive (long-poll, max 60s); returns `timed_out=True` on timeout |
@@ -155,8 +155,8 @@ Tools and routes never touch the DB directly. Tests instantiate `ChatService` wi
 | `clear_room` | `(project, name)` | Delete all messages in a room |
 | `mark_read` | `(room_id, reader, last_read_message_id)` | Mark messages as read (cursor only moves forward) |
 | `search` | `(query, project?)` | Search room names + message content |
-| `update_status` | `(room_id, sender, status)` | Update a sender's status in a room (UPSERT, max 500 chars) |
-| `get_team_status` | `(room_id)` | Get current status of all team members |
+| `update_status` | `(room_id, sender, status)` | Update a sender's status in a room (UPSERT, max 500 chars); requires non-empty sender/status; rejects missing/archived rooms |
+| `get_team_status` | `(room_id)` | Get current status of all team members; raises ValueError if room not found |
 
 ## SKILL.md
 
@@ -267,7 +267,7 @@ Uses PyPI OIDC Trusted Publishing (no stored secrets). See [RELEASING.md](RELEAS
 - **SSE for push** — unidirectional, auto-reconnect, Last-Event-Id for resume
 - **`get_all_room_stats()` batch for SSE** — 3 queries total (not 3N per-room) via batch COUNT/MAX/GROUP BY
 - **`_escape_like()` for search** — escapes SQL LIKE wildcards in user input
-- **No ORM** — direct sqlite3, schema is 2 tables
+- **No ORM** — direct sqlite3, schema is 4 tables (rooms, messages, read_cursors, room_status)
 - **`since_id` for incremental reads** — agents poll with last-seen message ID
 - **Read cursors for unread tracking** — `(room_id, reader)` PK, forward-only via `MAX()` in UPSERT, `ON DELETE CASCADE` for cleanup
 - **`wait_for_messages` for agent blocking** — asyncio.Queue per waiter; `post_message` notifies via `call_soon_threadsafe(_wake_all)` (all `_waiters` access event-loop-only); zero DB reads while waiting; agents call once instead of polling in a loop; timeout capped at 60s

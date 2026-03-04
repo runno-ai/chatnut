@@ -385,5 +385,4 @@ def get_team_status(room_id: str) -> dict:
     Raises:
         ValueError: If the room does not exist.
     """
-    statuses = _get_service().get_team_status(room_id)
-    return {"statuses": statuses}
+    return _get_service().get_team_status(room_id)

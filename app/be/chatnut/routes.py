@@ -80,12 +80,12 @@ async def status_event_generator(
             break
 
         try:
-            statuses = await anyio.to_thread.run_sync(
+            result = await anyio.to_thread.run_sync(
                 lambda: svc.get_team_status(room_id)
             )
         except ValueError:
             break
-        payload = json.dumps({"statuses": statuses}, sort_keys=True)
+        payload = json.dumps(result, sort_keys=True)
         content_hash = hashlib.sha256(payload.encode()).hexdigest()
         if content_hash != last_hash:
             last_hash = content_hash
@@ -229,8 +229,7 @@ def create_router(get_service: Callable[[], ChatService]) -> APIRouter:
     def room_status(room_id: str):
         svc = get_service()
         try:
-            statuses = svc.get_team_status(room_id)
-            return {"statuses": statuses}
+            return svc.get_team_status(room_id)
         except ValueError as e:
             msg = str(e)
             status_code = 404 if "not found" in msg else 422
@@ -239,7 +238,7 @@ def create_router(get_service: Callable[[], ChatService]) -> APIRouter:
     @router.get("/stream/status")
     async def stream_status(
         request: Request,
-        room_id: str = Query(...),
+        room_id: str = Query(..., min_length=1),
     ):
         svc = get_service()
         if not await anyio.to_thread.run_sync(lambda: svc.room_exists(room_id)):

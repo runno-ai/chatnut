@@ -419,7 +419,8 @@ def get_room_statuses(conn: sqlite3.Connection, room_id: str) -> list[dict]:
 
 def delete_room_statuses(conn: sqlite3.Connection, room_id: str) -> None:
     """Delete all statuses for a room."""
-    conn.execute("DELETE FROM room_status WHERE room_id = ?", (room_id,))
+    with conn:
+        conn.execute("DELETE FROM room_status WHERE room_id = ?", (room_id,))
 
 
 def search_rooms_and_messages(

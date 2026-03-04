@@ -50,6 +50,9 @@ class ChatService:
         branch: str | None = None,
         description: str | None = None,
     ) -> dict:
+        # team_name is intentionally absent from the service layer — it is a
+        # Claude-specific concern (writing chatroom.json to ~/.claude/teams/)
+        # and is handled exclusively at the MCP tool layer in mcp.py.
         room = create_room(self.db, project=project, name=name, branch=branch, description=description)
         return room.to_dict()
 
@@ -216,15 +219,16 @@ class ChatService:
             raise ValueError(f"Room '{room_obj.name}' is archived — cannot update status")
         return upsert_room_status(self.db, room_id, sender, status)
 
-    def get_team_status(self, room_id: str) -> list[dict]:
+    def get_team_status(self, room_id: str) -> dict:
         """Get all current statuses for all senders in a room.
 
+        Returns {"statuses": [...]} dict.
         Raises ValueError if the room does not exist.
         """
         room_obj = get_room_by_id(self.db, room_id)
         if room_obj is None:
             raise ValueError(f"Room '{room_id}' not found")
-        return get_room_statuses(self.db, room_id)
+        return {"statuses": get_room_statuses(self.db, room_id)}
 
     def search(self, query: str, project: str | None = None) -> dict:
         if not query or not query.strip():
