@@ -4,6 +4,7 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+app/be/chatnut/static/
 .venv/
 *.db
 .pytest_cache/

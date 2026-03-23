@@ -241,7 +241,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on push to `main` and on PRs ta
 
 | Job | Steps |
 |-----|-------|
-| **Backend Tests** | `uv sync --extra test` + `pytest -x` |
+| **Backend Tests** | `uv sync --frozen --extra test` + `pytest -x --tb=short` + `pip-audit` (fails on CVEs; suppress with `--ignore-vuln <CVE-ID>`) |
 | **Frontend** | `bun install` + `tsc --noEmit` + `vitest run` + `vite build` |
 
 ## E2E CI

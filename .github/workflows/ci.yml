@@ -40,11 +40,13 @@ jobs:
       - name: Run tests
         run: uv run pytest -x --tb=short
 
+      # Security: pip-audit MUST fail CI on known CVEs (no || true).
+      # To suppress a specific CVE, use: --ignore-vuln <CVE-ID>
       - name: Audit dependencies
         shell: bash
         run: |
-          uv pip compile pyproject.toml --extra test -o /tmp/audit-reqs.txt 2>/dev/null || true
-          uvx pip-audit --requirement /tmp/audit-reqs.txt || true
+          uv pip compile pyproject.toml --extra test -o /tmp/audit-reqs.txt
+          uvx pip-audit --requirement /tmp/audit-reqs.txt
 
   frontend:
     name: Frontend
