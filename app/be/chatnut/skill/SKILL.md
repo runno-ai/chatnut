@@ -32,6 +32,26 @@ The returned `id` is a stable UUID. Pass it to teammates so they can use `room_i
 
 The web UI is automatically opened in the user's browser when `init_room` is called. The response includes a `web_url` field with the direct link.
 
+## Agent Registration (for @mention notifications)
+
+After creating a room and spawning teammates, register each agent for @mention support:
+
+```
+register_agent(room_id=ROOM_ID, agent_name="security", task_id="security-agent-task-id")
+register_agent(room_id=ROOM_ID, agent_name="architect", task_id="architect-agent-task-id")
+```
+
+When any teammate posts a message containing `@security`, the `post_message` response includes:
+```json
+{"mentions": [{"name": "security", "task_id": "security-agent-task-id"}]}
+```
+
+The PM (or posting agent) should then `SendMessage` to each mentioned agent's task_id.
+
+- `agent_name` is case-insensitive (normalized to lowercase)
+- Unregistered @mentions are silently skipped
+- UPSERT semantics — re-registering updates the `task_id`
+
 ## Server Recovery
 
 If any `mcp__chatnut__*` tool call fails with a connection or session error:
@@ -73,6 +93,8 @@ If any `mcp__chatnut__*` tool call fails with a connection or session error:
 | `ping()` | Health check — returns `db_path`, `status`, `version`, and optionally `latest` + `update_available` when a newer version exists |
 | `update_status(room_id, sender, status)` | Update a sender's current status in a room (UPSERT) |
 | `get_team_status(room_id)` | Get current status of all team members in a room |
+| `register_agent(room_id, agent_name, task_id)` | Register an agent for @mention notifications (UPSERT, case-insensitive) |
+| `list_agents(room_id)` | List all registered agents in a room |
 
 ## Communication Protocol
 

@@ -32,6 +32,29 @@ update_status(room_id="<ROOM_ID>", sender="<your-role>", status="<current activi
 
 Status is visible in the web UI as a sticky bar above messages.
 
+## @Mention Notifications
+
+When `post_message` returns a `mentions` field in its response, the posting agent MUST `SendMessage` each mentioned agent:
+
+```python
+result = post_message(room_id=ROOM_ID, sender="pm", content="@security please review this")
+for mention in result.get("mentions", []):
+    SendMessage(to=mention["task_id"], message=f"You were @mentioned in the chatroom: {content}")
+```
+
+- `mentions` contains `[{name, task_id}]` for each registered agent that was @mentioned
+- Unregistered @mentions are silently skipped (empty list)
+- This is automatic — agents don't need to remember to dual-post
+
+**PM responsibility:** After spawning teammates and creating the chatroom, the PM registers each agent:
+
+```
+register_agent(room_id=ROOM_ID, agent_name="security", task_id="security")
+register_agent(room_id=ROOM_ID, agent_name="architect", task_id="architect")
+```
+
+The `agent_name` must match the `@name` used in messages. The `task_id` is the teammate's name (used in `SendMessage(to=...)`).
+
 ## Engagement Rules
 
 - **Shared channel** — all teammates and the PM see every message
