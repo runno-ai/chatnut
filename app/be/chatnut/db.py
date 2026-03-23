@@ -1,5 +1,6 @@
 """SQLite schema, migrations, and queries for team chat."""
 
+import logging
 import os
 import sqlite3
 import uuid
@@ -7,6 +8,8 @@ from datetime import datetime, timezone
 
 from chatnut.models import Room, Message
 from chatnut.migrate import run_migrations
+
+logger = logging.getLogger(__name__)
 
 ROOM_COLUMNS = ["id", "name", "project", "branch", "description", "status", "created_at", "archived_at", "metadata"]
 MSG_COLUMNS = ["id", "room_id", "sender", "content", "message_type", "created_at", "metadata"]
@@ -32,7 +35,13 @@ def _row_to_message(row: tuple) -> Message:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    """Return current UTC time in ISO 8601 format with explicit +00:00 offset.
+
+    Uses strftime to guarantee the +00:00 suffix. datetime.isoformat() also produces
+    this for UTC-aware datetimes, but an explicit format string makes the contract
+    visible and prevents accidental regressions.
+    """
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f+00:00")
 
 
 def _new_id() -> str:
@@ -66,7 +75,13 @@ def create_room(
         _room_select() + " WHERE project=? AND name=?",
         (project, name),
     ).fetchone()
-    return _row_to_room(row)
+    room = _row_to_room(row)
+    if room.id != room_id:
+        logger.debug(
+            "create_room: room '%s/%s' already exists (id=%s), discarded generated UUID %s",
+            project, name, room.id, room_id,
+        )
+    return room
 
 
 def get_room(conn: sqlite3.Connection, project: str, name: str) -> Room | None:
@@ -136,13 +151,17 @@ def archive_room(conn: sqlite3.Connection, project: str, name: str) -> Room | No
 
 
 def delete_room(conn: sqlite3.Connection, room_id: str) -> int:
-    """Delete a room and all its messages. Returns number of messages deleted."""
+    """Delete a room and all its messages. Returns number of messages deleted.
+
+    Messages, read cursors, and room statuses are deleted via ON DELETE CASCADE.
+    We count messages before deletion for the return value.
+    Note: TOCTOU between COUNT and DELETE is harmless — archived rooms reject
+    new messages at the service layer, so the count cannot increase.
+    """
     with conn:
-        msg_cursor = conn.execute("DELETE FROM messages WHERE room_id=?", (room_id,))
-        msg_count = msg_cursor.rowcount
-        delete_read_cursors(conn, room_id)
-        delete_room_statuses(conn, room_id)
-        delete_agent_registrations(conn, room_id)
+        msg_count = conn.execute(
+            "SELECT COUNT(*) FROM messages WHERE room_id=?", (room_id,)
+        ).fetchone()[0]
         conn.execute("DELETE FROM rooms WHERE id=?", (room_id,))
     return msg_count
 
@@ -276,7 +295,7 @@ def auto_archive_stale_rooms(conn: sqlite3.Connection, max_inactive_seconds: int
     """
     cutoff = datetime.fromtimestamp(
         datetime.now(timezone.utc).timestamp() - max_inactive_seconds, tz=timezone.utc
-    ).isoformat()
+    ).strftime("%Y-%m-%dT%H:%M:%S.%f+00:00")
     now = _now()
 
     # Find live rooms where last activity is before cutoff

@@ -295,3 +295,110 @@ class TestEnsureServer:
              patch("chatnut.cli.time.sleep"):
             with pytest.raises(RuntimeError, match="Failed to start"):
                 _ensure_server()
+
+    def test_ensure_server_acquires_flock(self, tmp_path, monkeypatch):
+        """_ensure_server acquires fcntl.flock(LOCK_EX) on lock file."""
+        monkeypatch.setenv("CHATNUT_RUN_DIR", str(tmp_path))
+
+        from chatnut.cli import _ensure_server
+
+        def fake_popen(*args, **kwargs):
+            (tmp_path / "server.port").write_text("8888")
+            return MagicMock()
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+
+        import fcntl
+        flock_calls = []
+        original_flock = fcntl.flock
+
+        def tracking_flock(fd, operation):
+            flock_calls.append(operation)
+            return original_flock(fd, operation)
+
+        with patch("chatnut.cli.subprocess.Popen", side_effect=fake_popen), \
+             patch("chatnut.cli.httpx.get", side_effect=[
+                 httpx.ConnectError("refused"),
+                 mock_resp,
+             ]), \
+             patch("chatnut.cli.time.sleep"), \
+             patch("chatnut.cli.fcntl.flock", side_effect=tracking_flock):
+            _ensure_server()
+
+        assert (tmp_path / "server.lock").exists()
+        # Verify LOCK_EX was acquired and LOCK_UN was released
+        assert fcntl.LOCK_EX in flock_calls
+        assert fcntl.LOCK_UN in flock_calls
+
+    def test_ensure_server_lock_file_created(self, tmp_path, monkeypatch):
+        """_ensure_server creates a lock file for flock coordination."""
+        monkeypatch.setenv("CHATNUT_RUN_DIR", str(tmp_path))
+
+        from chatnut.cli import _ensure_server
+
+        def fake_popen(*args, **kwargs):
+            (tmp_path / "server.port").write_text("8888")
+            return MagicMock()
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+
+        with patch("chatnut.cli.subprocess.Popen", side_effect=fake_popen), \
+             patch("chatnut.cli.httpx.get", side_effect=[
+                 httpx.ConnectError("refused"),
+                 mock_resp,
+             ]), \
+             patch("chatnut.cli.time.sleep"):
+            _ensure_server()
+
+        assert (tmp_path / "server.lock").exists()
+
+    def test_ensure_server_concurrent_double_start(self, tmp_path, monkeypatch):
+        """Two concurrent _ensure_server() calls should only spawn one server."""
+        import threading
+        monkeypatch.setenv("CHATNUT_RUN_DIR", str(tmp_path))
+
+        from chatnut.cli import _ensure_server
+
+        popen_call_count = 0
+        popen_lock = threading.Lock()
+
+        def fake_popen(*args, **kwargs):
+            nonlocal popen_call_count
+            with popen_lock:
+                popen_call_count += 1
+            # Simulate server becoming ready after Popen.
+            # Use the current process PID so os.kill(pid, 0) succeeds in _is_server_running().
+            (tmp_path / "server.port").write_text("9999")
+            (tmp_path / "server.pid").write_text(str(os.getpid()))
+            return MagicMock()
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+
+        results = [None, None]
+        errors = [None, None]
+
+        def caller(idx):
+            try:
+                results[idx] = _ensure_server()
+            except Exception as e:
+                errors[idx] = e
+
+        with patch("chatnut.cli.subprocess.Popen", side_effect=fake_popen), \
+             patch("chatnut.cli.httpx.get", return_value=mock_resp), \
+             patch("chatnut.cli.time.sleep"):
+            t1 = threading.Thread(target=caller, args=(0,))
+            t2 = threading.Thread(target=caller, args=(1,))
+            t1.start()
+            t2.start()
+            t1.join(timeout=10)
+            t2.join(timeout=10)
+
+        assert errors[0] is None, f"Thread 0 raised: {errors[0]}"
+        assert errors[1] is None, f"Thread 1 raised: {errors[1]}"
+        assert results[0] == "http://127.0.0.1:9999"
+        assert results[1] == "http://127.0.0.1:9999"
+        # Critical assertion: only ONE Popen call despite two concurrent callers
+        assert popen_call_count == 1, f"Expected 1 Popen call, got {popen_call_count}"

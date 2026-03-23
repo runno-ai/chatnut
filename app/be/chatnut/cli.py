@@ -8,6 +8,7 @@ Usage:
 """
 import argparse
 import atexit
+import fcntl
 import os
 import signal
 import socket
@@ -114,7 +115,12 @@ def _get_server_url() -> str | None:
 
 
 def _ensure_server() -> str:
-    """Ensure the HTTP server is running. Returns the server URL."""
+    """Ensure the HTTP server is running. Returns the server URL.
+
+    Uses fcntl.flock on a lock file to prevent concurrent startup races
+    when multiple CLI sessions call _ensure_server() simultaneously.
+    This is Unix-only, consistent with start_new_session=True in Popen.
+    """
     if _is_server_running():
         url = _get_server_url()
         if url:
@@ -123,31 +129,47 @@ def _ensure_server() -> str:
     run_dir = _get_run_dir()
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    # Redirect server output to a log file for debugging
-    log_file = run_dir / "server.log"
-    log_fh = open(log_file, "a")  # noqa: SIM115
-    subprocess.Popen(
-        [sys.executable, "-m", "chatnut.cli", "serve"],
-        stdout=log_fh,
-        stderr=log_fh,
-        start_new_session=True,
-    )
-    log_fh.close()
+    lock_file = run_dir / "server.lock"
+    lock_fh = open(lock_file, "w")  # noqa: SIM115
+    try:
+        fcntl.flock(lock_fh, fcntl.LOCK_EX)
 
-    port_file = run_dir / "server.port"
-    for _ in range(20):
-        time.sleep(0.5)
-        if port_file.exists():
+        # Re-check after acquiring lock — another process may have started the server
+        if _is_server_running():
             url = _get_server_url()
             if url:
-                try:
-                    resp = httpx.get(f"{url}/api/status", timeout=2)
-                    if resp.status_code == 200:
-                        return url
-                except Exception:
-                    continue
+                return url
 
-    raise RuntimeError("Failed to start chatnut server within 10 seconds")
+        # Redirect server output to a log file for debugging
+        log_file = run_dir / "server.log"
+        log_fh = open(log_file, "a")  # noqa: SIM115
+        try:
+            subprocess.Popen(
+                [sys.executable, "-m", "chatnut.cli", "serve"],
+                stdout=log_fh,
+                stderr=log_fh,
+                start_new_session=True,
+            )
+        finally:
+            log_fh.close()
+
+        port_file = run_dir / "server.port"
+        for _ in range(20):
+            time.sleep(0.5)
+            if port_file.exists():
+                url = _get_server_url()
+                if url:
+                    try:
+                        resp = httpx.get(f"{url}/api/status", timeout=2)
+                        if resp.status_code == 200:
+                            return url
+                    except Exception:
+                        continue
+
+        raise RuntimeError("Failed to start chatnut server within 10 seconds")
+    finally:
+        fcntl.flock(lock_fh, fcntl.LOCK_UN)
+        lock_fh.close()
 
 
 def cmd_open(args: argparse.Namespace) -> None:

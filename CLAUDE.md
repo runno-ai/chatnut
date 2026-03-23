@@ -201,7 +201,7 @@ CREATE TABLE IF NOT EXISTS rooms (
 
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    room_id TEXT NOT NULL REFERENCES rooms(id),
+    room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
     sender TEXT NOT NULL,
     content TEXT NOT NULL,
     message_type TEXT NOT NULL DEFAULT 'message',  -- 'message' | 'system'
@@ -336,6 +336,7 @@ The dev start script (`~/.claude/skills/chatnut/start-server-dev.sh`) sets `CHAT
 - **Update notification via GitHub releases API** — `version_check.py` fetches latest release tag from GitHub with 1hr in-memory TTL cache; `get_version_info()` (async) populates cache, `get_cached_version_info()` (sync) reads it without I/O; three consumers: startup log warning, `ping()` tool, `/api/status` endpoint; frontend `useVersion` hook fetches `/api/status` on load and shows a dismissible amber banner
 - **Decoupled status system** — `room_status` table is separate from `messages`; UPSERT semantics (one row per sender per room); frontend shows as sticky StatusBar above messages, not inline; polling-based SSE endpoint consistent with existing chatroom stream
 - **@mention notification via agent registry** — `agent_registry` table stores `(room_id, agent_name, task_id)` per room; `post_message` parses `@<name>` patterns via `(?<!\w)@([\w-]+)` regex, resolves against registry (case-insensitive via lowercase normalization), and returns `mentions: [{name, task_id}]` in the response; chatnut provides data, the calling agent fires `SendMessage`; unregistered mentions are silently skipped
+- **Single-worker only** — `_waiters` (asyncio.Queue per waiter) are process-local. Multi-worker deployment (e.g. gunicorn with multiple workers) breaks `wait_for_messages` silently — notifications from one worker are invisible to waiters in another. Always run with `uvicorn` directly, never behind a multi-worker process manager.
 
 ## E2E Testing Patterns
 

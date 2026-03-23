@@ -2,7 +2,6 @@
 
 import re
 import sqlite3
-import threading
 
 from chatnut.db import (
     create_room,
@@ -37,7 +36,6 @@ _MENTION_RE = re.compile(r'(?<!\w)@([\w-]+)')
 class ChatService:
     def __init__(self, db_conn: sqlite3.Connection):
         self.db = db_conn
-        self.lock = threading.Lock()
 
     def db_path(self) -> str:
         """Return the database file path used by this service instance.

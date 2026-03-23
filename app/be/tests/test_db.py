@@ -571,3 +571,52 @@ def test_agent_registrations_cascade_on_room_delete(db):
         db.execute("DELETE FROM rooms WHERE id=?", (room.id,))
     row = db.execute("SELECT COUNT(*) FROM agent_registry WHERE room_id=?", (room.id,)).fetchone()
     assert row[0] == 0
+
+
+def test_messages_cascade_on_room_delete(db):
+    """Messages should be automatically deleted when their room is deleted via CASCADE."""
+    room = create_room(db, project="proj", name="cascade-test")
+    insert_message(db, room.id, "alice", "hello")
+    insert_message(db, room.id, "bob", "world")
+
+    # Archive then delete directly via SQL to test CASCADE behavior
+    db.execute("UPDATE rooms SET status='archived', archived_at=datetime('now') WHERE id=?", (room.id,))
+    db.commit()
+    db.execute("DELETE FROM rooms WHERE id=?", (room.id,))
+    db.commit()
+
+    # Messages should be gone via CASCADE
+    msgs, _ = get_messages(db, room.id)
+    assert len(msgs) == 0
+
+
+def test_create_room_idempotent_logs_discarded_uuid(db, caplog):
+    """create_room logs at DEBUG level when a generated UUID is discarded."""
+    import logging
+    with caplog.at_level(logging.DEBUG):
+        r1 = create_room(db, project="proj", name="dedup-test")
+        r2 = create_room(db, project="proj", name="dedup-test")
+
+    assert r1.id == r2.id
+    # The second call generates a new UUID that gets discarded — should log
+    discard_logs = [r for r in caplog.records if "discarded" in r.message.lower()]
+    assert len(discard_logs) >= 1
+
+
+def test_now_always_uses_plus_zero_offset():
+    """_now() must always produce +00:00 suffix, never Z."""
+    from chatnut.db import _now
+    timestamp = _now()
+    assert timestamp.endswith("+00:00"), f"Expected +00:00 suffix, got: {timestamp}"
+    assert "Z" not in timestamp
+    assert "T" in timestamp  # ISO 8601 format
+
+
+def test_now_roundtrip_string_comparison():
+    """Timestamps from _now() must compare correctly as strings."""
+    import time as time_mod
+    from chatnut.db import _now
+    t1 = _now()
+    time_mod.sleep(0.01)
+    t2 = _now()
+    assert t2 > t1  # String comparison must be chronological
