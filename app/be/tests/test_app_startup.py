@@ -78,13 +78,24 @@ async def test_startup_silent_on_failure(caplog):
 
 
 @pytest.mark.anyio
-async def test_startup_logs_single_worker_note(caplog):
+async def test_startup_logs_single_worker_note(caplog, db):
     """Startup lifespan should log a note about single-worker requirement."""
     from chatnut.app import app
+    from chatnut.service import ChatService
 
-    with caplog.at_level(logging.INFO):
-        async with app.router.lifespan_context(app):
-            pass
+    mock_version_info = VersionInfo(current="0.3.0", latest="0.3.0")
+    with patch(
+        "chatnut.app._get_service",
+        return_value=ChatService(db),
+    ):
+        with patch(
+            "chatnut.app.get_version_info",
+            new_callable=AsyncMock,
+            return_value=mock_version_info,
+        ):
+            with caplog.at_level(logging.INFO):
+                async with app.router.lifespan_context(app):
+                    pass
 
     single_worker_logs = [
         r for r in caplog.records

@@ -353,3 +353,52 @@ class TestEnsureServer:
             _ensure_server()
 
         assert (tmp_path / "server.lock").exists()
+
+    def test_ensure_server_concurrent_double_start(self, tmp_path, monkeypatch):
+        """Two concurrent _ensure_server() calls should only spawn one server."""
+        import threading
+        monkeypatch.setenv("CHATNUT_RUN_DIR", str(tmp_path))
+
+        from chatnut.cli import _ensure_server
+
+        popen_call_count = 0
+        popen_lock = threading.Lock()
+
+        def fake_popen(*args, **kwargs):
+            nonlocal popen_call_count
+            with popen_lock:
+                popen_call_count += 1
+            # Simulate server becoming ready after Popen.
+            # Use the current process PID so os.kill(pid, 0) succeeds in _is_server_running().
+            (tmp_path / "server.port").write_text("9999")
+            (tmp_path / "server.pid").write_text(str(os.getpid()))
+            return MagicMock()
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+
+        results = [None, None]
+        errors = [None, None]
+
+        def caller(idx):
+            try:
+                results[idx] = _ensure_server()
+            except Exception as e:
+                errors[idx] = e
+
+        with patch("chatnut.cli.subprocess.Popen", side_effect=fake_popen), \
+             patch("chatnut.cli.httpx.get", return_value=mock_resp), \
+             patch("chatnut.cli.time.sleep"):
+            t1 = threading.Thread(target=caller, args=(0,))
+            t2 = threading.Thread(target=caller, args=(1,))
+            t1.start()
+            t2.start()
+            t1.join(timeout=10)
+            t2.join(timeout=10)
+
+        assert errors[0] is None, f"Thread 0 raised: {errors[0]}"
+        assert errors[1] is None, f"Thread 1 raised: {errors[1]}"
+        assert results[0] == "http://127.0.0.1:9999"
+        assert results[1] == "http://127.0.0.1:9999"
+        # Critical assertion: only ONE Popen call despite two concurrent callers
+        assert popen_call_count == 1, f"Expected 1 Popen call, got {popen_call_count}"

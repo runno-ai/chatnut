@@ -24,7 +24,7 @@ affected_crates:
 ## Issues in Scope
 
 - **MCP-21**: Backend: server startup race condition and lock clarity (High)
-  1. Fix `_ensure_server()` race condition — use `fcntl.flock` on PID file
+  1. Fix `_ensure_server()` race condition — use `fcntl.flock` on `server.lock`
   2. Rename `svc.lock` to `_wait_notify_lock` with docstring, move to `mcp.py`
   3. Document single-worker requirement (uvicorn only, no gunicorn multi-worker)
 

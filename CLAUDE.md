@@ -201,7 +201,7 @@ CREATE TABLE IF NOT EXISTS rooms (
 
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    room_id TEXT NOT NULL REFERENCES rooms(id),
+    room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
     sender TEXT NOT NULL,
     content TEXT NOT NULL,
     message_type TEXT NOT NULL DEFAULT 'message',  -- 'message' | 'system'
