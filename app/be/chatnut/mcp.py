@@ -384,3 +384,44 @@ def get_team_status(room_id: str) -> dict:
         ValueError: If the room does not exist.
     """
     return _get_service().get_team_status(room_id)
+
+
+@mcp.tool()
+def register_agent(room_id: str, agent_name: str, task_id: str) -> dict:
+    """Register an agent in a room for @mention notifications.
+
+    When a message containing @<agent_name> is posted to this room,
+    post_message will include the agent's task_id in its response,
+    enabling the caller to SendMessage the mentioned agent.
+
+    UPSERT semantics — re-registering with a different task_id replaces the old one.
+    agent_name is normalized to lowercase for case-insensitive matching.
+
+    Args:
+        room_id: The room UUID returned by init_room.
+        agent_name: Mention name used in @mentions after strip/lower normalization.
+            Must contain only letters, numbers, underscores, or hyphens.
+        task_id: Non-empty CC agent/task name to SendMessage to when @mentioned.
+
+    Raises:
+        ValueError: If agent_name/task_id is invalid, or if the room does not exist or is archived.
+    """
+    svc = _get_service()
+    with svc.lock:
+        return svc.register_agent(room_id, agent_name, task_id)
+
+
+@mcp.tool()
+def list_agents(room_id: str) -> dict:
+    """List all registered agents in a room.
+
+    Args:
+        room_id: The room UUID returned by init_room.
+
+    Returns:
+        {"agents": [{room_id, agent_name, task_id, registered_at}, ...]}
+
+    Raises:
+        ValueError: If the room does not exist.
+    """
+    return _get_service().list_agents(room_id)

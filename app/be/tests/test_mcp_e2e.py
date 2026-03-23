@@ -471,3 +471,66 @@ async def test_update_status_archived_room(mcp_svc):
             raise_on_error=False,
         )
     assert result.is_error is True
+
+
+# --- Mention notification E2E tests ---
+
+
+@pytest.mark.anyio
+async def test_e2e_mention_notification_flow(mcp_svc):
+    """register_agent + post_message @mention → mentions populated; unregistered @mention → empty."""
+    async with Client(mcp_module.mcp) as client:
+        room = await call(client, "init_room", {"project": "proj", "name": "mention-room"})
+        room_id = room["id"]
+
+        # Register two agents
+        await call(client, "register_agent", {"room_id": room_id, "agent_name": "security", "task_id": "task-sec-1"})
+        await call(client, "register_agent", {"room_id": room_id, "agent_name": "architect", "task_id": "task-arch-1"})
+
+        # Post a message that @mentions both registered agents
+        msg = await call(
+            client,
+            "post_message",
+            {"room_id": room_id, "sender": "pm", "content": "Hey @security and @architect please review"},
+        )
+        assert len(msg["mentions"]) == 2
+        mention_names = {m["name"] for m in msg["mentions"]}
+        assert mention_names == {"security", "architect"}
+
+        # Post a message that @mentions an unregistered agent
+        msg_unknown = await call(
+            client,
+            "post_message",
+            {"room_id": room_id, "sender": "pm", "content": "Hey @unknown please help"},
+        )
+        assert msg_unknown["mentions"] == []
+
+        # list_agents returns both registered agents
+        agents_result = await call(client, "list_agents", {"room_id": room_id})
+        assert len(agents_result["agents"]) == 2
+        agent_names = {a["agent_name"] for a in agents_result["agents"]}
+        assert agent_names == {"security", "architect"}
+
+
+@pytest.mark.anyio
+async def test_e2e_register_agent_error_paths(mcp_svc):
+    """register_agent() on nonexistent or archived room should return MCP errors."""
+    async with Client(mcp_module.mcp) as client:
+        # Try to register on a nonexistent room
+        result = await client.call_tool(
+            "register_agent",
+            {"room_id": "00000000-0000-0000-0000-000000000000", "agent_name": "security", "task_id": "task-1"},
+            raise_on_error=False,
+        )
+        assert result.is_error is True
+
+        # Create and archive a room, then try to register
+        room = await call(client, "init_room", {"project": "proj", "name": "arch-room"})
+        room_id = room["id"]
+        await call(client, "archive_room", {"project": "proj", "name": "arch-room"})
+        result = await client.call_tool(
+            "register_agent",
+            {"room_id": room_id, "agent_name": "security", "task_id": "task-1"},
+            raise_on_error=False,
+        )
+        assert result.is_error is True

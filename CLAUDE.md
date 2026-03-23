@@ -148,7 +148,7 @@ Tools and routes never touch the DB directly. Tests instantiate `ChatService` wi
 |------|-----------|---------|
 | `ping` | `()` | Health check (DB path, version info, `web_url` if server running) |
 | `init_room` | `(project, name, branch?, description?, team_name?)` | Create a chatroom (idempotent); auto-opens browser via `web_url`; when `team_name` provided, writes `chatroom.json` to `~/.claude/teams/{team_name}/` (sanitized to prevent path traversal; write failures are non-fatal) |
-| `post_message` | `(room_id, sender, content, message_type?)` | Post a message by room_id |
+| `post_message` | `(room_id, sender, content, message_type?)` | Post a message by room_id; returns `mentions` for any @registered agents |
 | `read_messages` | `(room_id, since_id?, limit?, message_type?)` | Read messages by room_id |
 | `wait_for_messages` | `(room_id, since_id, timeout?, limit?, message_type?)` | Block until new messages arrive (long-poll, max 60s); returns `timed_out=True` on timeout |
 | `list_rooms` | `(project?, status?)` | List rooms (filter by project, status) |
@@ -160,6 +160,8 @@ Tools and routes never touch the DB directly. Tests instantiate `ChatService` wi
 | `search` | `(query, project?)` | Search room names + message content |
 | `update_status` | `(room_id, sender, status)` | Update a sender's status in a room (UPSERT, max 500 chars); requires non-empty sender/status; rejects missing/archived rooms |
 | `get_team_status` | `(room_id)` | Get current status of all team members; raises ValueError if room not found |
+| `register_agent` | `(room_id, agent_name, task_id)` | Register agent for @mention notifications (UPSERT, case-insensitive) |
+| `list_agents` | `(room_id)` | List registered agents in a room |
 
 ## SKILL.md
 
@@ -222,6 +224,14 @@ CREATE TABLE IF NOT EXISTS room_status (
     status TEXT NOT NULL CHECK(length(status) <= 500),
     updated_at TEXT NOT NULL,
     PRIMARY KEY (room_id, sender)
+);
+
+CREATE TABLE IF NOT EXISTS agent_registry (
+    room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+    agent_name TEXT NOT NULL,
+    task_id TEXT NOT NULL,
+    registered_at TEXT NOT NULL,
+    PRIMARY KEY (room_id, agent_name)
 );
 ```
 
@@ -318,13 +328,14 @@ The dev start script (`~/.claude/skills/chatnut/start-server-dev.sh`) sets `CHAT
 - **SSE for push** — unidirectional, auto-reconnect, Last-Event-Id for resume
 - **`get_all_room_stats()` batch for SSE** — 3 queries total (not 3N per-room) via batch COUNT/MAX/GROUP BY
 - **`_escape_like()` for search** — escapes SQL LIKE wildcards in user input
-- **No ORM** — direct sqlite3, schema is 4 tables (rooms, messages, read_cursors, room_status)
+- **No ORM** — direct sqlite3, schema is 5 tables (rooms, messages, read_cursors, room_status, agent_registry)
 - **`since_id` for incremental reads** — agents poll with last-seen message ID
 - **Read cursors for unread tracking** — `(room_id, reader)` PK, forward-only via `MAX()` in UPSERT, `ON DELETE CASCADE` for cleanup
 - **`wait_for_messages` for agent blocking** — asyncio.Queue per waiter; `post_message` notifies via `call_soon_threadsafe(_wake_all)` (all `_waiters` access event-loop-only); zero DB reads while waiting; agents call once instead of polling in a loop; timeout capped at 60s
 - **Auto-open browser on `init_room`** — `init_room` reads `server.port` file, constructs `web_url`, and calls `webbrowser.open()` automatically; suppressed via `CHATNUT_OPEN_BROWSER=0` in tests/CI; `conftest.py` has autouse `_suppress_browser` fixture
 - **Update notification via GitHub releases API** — `version_check.py` fetches latest release tag from GitHub with 1hr in-memory TTL cache; `get_version_info()` (async) populates cache, `get_cached_version_info()` (sync) reads it without I/O; three consumers: startup log warning, `ping()` tool, `/api/status` endpoint; frontend `useVersion` hook fetches `/api/status` on load and shows a dismissible amber banner
 - **Decoupled status system** — `room_status` table is separate from `messages`; UPSERT semantics (one row per sender per room); frontend shows as sticky StatusBar above messages, not inline; polling-based SSE endpoint consistent with existing chatroom stream
+- **@mention notification via agent registry** — `agent_registry` table stores `(room_id, agent_name, task_id)` per room; `post_message` parses `@<name>` patterns via `(?<!\w)@([\w-]+)` regex, resolves against registry (case-insensitive via lowercase normalization), and returns `mentions: [{name, task_id}]` in the response; chatnut provides data, the calling agent fires `SendMessage`; unregistered mentions are silently skipped
 
 ## E2E Testing Patterns
 

@@ -21,6 +21,9 @@ from chatnut.db import (
     get_unread_counts,
     upsert_room_status,
     get_room_statuses,
+    upsert_agent_registration,
+    get_agent_registrations,
+    delete_agent_registrations,
 )
 
 
@@ -511,3 +514,60 @@ def test_room_status_length_constraint(db):
     # 501 chars should fail
     with pytest.raises(sqlite3.IntegrityError):
         upsert_room_status(db, room_id, "agent", "x" * 501)
+
+
+# --- Agent Registry ---
+
+
+def test_agent_registry_table_exists(db):
+    tables = db.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+    ).fetchall()
+    names = [t[0] for t in tables]
+    assert "agent_registry" in names
+
+
+def test_upsert_agent_registration(db):
+    room = create_room(db, "proj", "dev")
+    upsert_agent_registration(db, room.id, "security", "task-abc")
+    regs = get_agent_registrations(db, room.id)
+    assert len(regs) == 1
+    assert regs[0]["agent_name"] == "security"
+    assert regs[0]["task_id"] == "task-abc"
+    assert regs[0]["registered_at"]
+
+
+def test_upsert_agent_registration_updates_task_id(db):
+    room = create_room(db, "proj", "dev")
+    upsert_agent_registration(db, room.id, "security", "task-abc")
+    upsert_agent_registration(db, room.id, "security", "task-xyz")
+    regs = get_agent_registrations(db, room.id)
+    assert len(regs) == 1
+    assert regs[0]["task_id"] == "task-xyz"
+
+
+def test_get_agent_registrations_empty(db):
+    room = create_room(db, "proj", "dev")
+    regs = get_agent_registrations(db, room.id)
+    assert regs == []
+
+
+def test_delete_agent_registrations(db):
+    room = create_room(db, "proj", "dev")
+    upsert_agent_registration(db, room.id, "security", "task-abc")
+    upsert_agent_registration(db, room.id, "architect", "task-def")
+    delete_agent_registrations(db, room.id)
+    assert get_agent_registrations(db, room.id) == []
+
+
+def test_agent_registrations_cascade_on_room_delete(db):
+    """Verify ON DELETE CASCADE cleans up registrations when room is deleted directly."""
+    room = create_room(db, "proj", "dev")
+    upsert_agent_registration(db, room.id, "security", "task-abc")
+    archive_room(db, "proj", "dev")
+    # Delete room directly via SQL (bypass delete_room() which explicitly deletes)
+    # to verify CASCADE works at the FK level
+    with db:
+        db.execute("DELETE FROM rooms WHERE id=?", (room.id,))
+    row = db.execute("SELECT COUNT(*) FROM agent_registry WHERE room_id=?", (room.id,)).fetchone()
+    assert row[0] == 0
