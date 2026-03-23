@@ -15,6 +15,7 @@ async def test_all_tools_registered():
         "list_rooms", "archive_room", "delete_room", "clear_room",
         "search", "list_projects", "mark_read", "wait_for_messages",
         "update_status", "get_team_status",
+        "register_agent", "list_agents",
     }
     assert expected.issubset(tool_names), f"Missing tools: {expected - tool_names}"
 
@@ -356,3 +357,55 @@ def test_mcp_get_team_status(db, monkeypatch):
     assert len(statuses) == 2
     senders = {s["sender"] for s in statuses}
     assert senders == {"agent-1", "agent-2"}
+
+
+def test_register_agent_tool(db):
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+
+    svc = ChatService(db)
+    original = mcp_module._service_factory
+    mcp_module.set_service_factory(lambda: svc)
+    try:
+        room = svc.init_room("proj", "dev")
+        result = mcp_module.register_agent(room["id"], "security", "task-abc")
+    finally:
+        mcp_module.set_service_factory(original)
+
+    assert result["agent_name"] == "security"
+    assert result["task_id"] == "task-abc"
+
+
+def test_list_agents_tool(db):
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+
+    svc = ChatService(db)
+    original = mcp_module._service_factory
+    mcp_module.set_service_factory(lambda: svc)
+    try:
+        room = svc.init_room("proj", "dev")
+        mcp_module.register_agent(room["id"], "security", "task-abc")
+        mcp_module.register_agent(room["id"], "architect", "task-def")
+        result = mcp_module.list_agents(room["id"])
+    finally:
+        mcp_module.set_service_factory(original)
+
+    assert len(result["agents"]) == 2
+
+
+def test_post_message_returns_mentions(db):
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+
+    svc = ChatService(db)
+    original = mcp_module._service_factory
+    mcp_module.set_service_factory(lambda: svc)
+    try:
+        room = svc.init_room("proj", "dev")
+        mcp_module.register_agent(room["id"], "security", "task-abc")
+        result = mcp_module.post_message(room["id"], "pm", "@security check this")
+    finally:
+        mcp_module.set_service_factory(original)
+
+    assert result["mentions"] == [{"name": "security", "task_id": "task-abc"}]
