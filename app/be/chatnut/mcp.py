@@ -394,8 +394,11 @@ def register_agent(room_id: str, agent_name: str, task_id: str) -> dict:
     post_message will include the agent's task_id in its response,
     enabling the caller to SendMessage the mentioned agent.
 
-    UPSERT semantics — re-registering updates the task_id.
+    UPSERT semantics — re-registering with a different task_id replaces the old one.
     agent_name is normalized to lowercase for case-insensitive matching.
+
+    Note: this tool does not acquire svc.lock. Agent registration happens during room
+    setup (before active messaging), so lock contention with post_message is not a concern.
 
     Args:
         room_id: The room UUID returned by init_room.

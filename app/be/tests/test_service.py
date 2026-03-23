@@ -717,6 +717,20 @@ def test_register_agent_empty_task_id(db):
         svc.register_agent(room["id"], "security", "")
 
 
+def test_register_agent_whitespace_name(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    with pytest.raises(ValueError, match="agent_name"):
+        svc.register_agent(room["id"], "   ", "task-abc")
+
+
+def test_register_agent_whitespace_task_id(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    with pytest.raises(ValueError, match="task_id"):
+        svc.register_agent(room["id"], "security", "   ")
+
+
 def test_post_message_detects_single_mention(db):
     svc = ChatService(db)
     room = svc.init_room("proj", "dev")
@@ -799,6 +813,14 @@ def test_post_message_mention_after_newline(db):
     assert result["mentions"] == [{"name": "security", "task_id": "task-abc"}]
 
 
+def test_post_message_no_false_mention_digit_prefix(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.register_agent(room["id"], "agentname", "task-abc")
+    result = svc.post_message_by_room_id(room["id"], "pm", "123@agentname test")
+    assert result["mentions"] == []
+
+
 def test_post_message_mention_after_punctuation(db):
     svc = ChatService(db)
     room = svc.init_room("proj", "dev")
@@ -840,3 +862,5 @@ def test_list_agents_archived_room_allowed(db):
     svc.archive_room("proj", "dev")
     result = svc.list_agents(room["id"])
     assert len(result["agents"]) == 1
+    assert result["agents"][0]["agent_name"] == "security"
+    assert result["agents"][0]["task_id"] == "task-abc"

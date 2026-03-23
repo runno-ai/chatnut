@@ -21,6 +21,9 @@ from chatnut.db import (
     get_unread_counts,
     upsert_room_status,
     get_room_statuses,
+    upsert_agent_registration,
+    get_agent_registrations,
+    delete_agent_registrations,
 )
 
 
@@ -516,18 +519,25 @@ def test_room_status_length_constraint(db):
 # --- Agent Registry ---
 
 
+def test_agent_registry_table_exists(db):
+    tables = db.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+    ).fetchall()
+    names = [t[0] for t in tables]
+    assert "agent_registry" in names
+
+
 def test_upsert_agent_registration(db):
-    from chatnut.db import upsert_agent_registration, get_agent_registrations
     room = create_room(db, "proj", "dev")
     upsert_agent_registration(db, room.id, "security", "task-abc")
     regs = get_agent_registrations(db, room.id)
     assert len(regs) == 1
     assert regs[0]["agent_name"] == "security"
     assert regs[0]["task_id"] == "task-abc"
+    assert regs[0]["registered_at"]
 
 
 def test_upsert_agent_registration_updates_task_id(db):
-    from chatnut.db import upsert_agent_registration, get_agent_registrations
     room = create_room(db, "proj", "dev")
     upsert_agent_registration(db, room.id, "security", "task-abc")
     upsert_agent_registration(db, room.id, "security", "task-xyz")
@@ -537,14 +547,12 @@ def test_upsert_agent_registration_updates_task_id(db):
 
 
 def test_get_agent_registrations_empty(db):
-    from chatnut.db import get_agent_registrations
     room = create_room(db, "proj", "dev")
     regs = get_agent_registrations(db, room.id)
     assert regs == []
 
 
 def test_delete_agent_registrations(db):
-    from chatnut.db import upsert_agent_registration, get_agent_registrations, delete_agent_registrations
     room = create_room(db, "proj", "dev")
     upsert_agent_registration(db, room.id, "security", "task-abc")
     upsert_agent_registration(db, room.id, "architect", "task-def")
@@ -554,7 +562,6 @@ def test_delete_agent_registrations(db):
 
 def test_agent_registrations_cascade_on_room_delete(db):
     """Verify ON DELETE CASCADE cleans up registrations when room is deleted directly."""
-    from chatnut.db import upsert_agent_registration
     room = create_room(db, "proj", "dev")
     upsert_agent_registration(db, room.id, "security", "task-abc")
     archive_room(db, "proj", "dev")
