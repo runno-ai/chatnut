@@ -601,3 +601,22 @@ def test_create_room_idempotent_logs_discarded_uuid(db, caplog):
     # The second call generates a new UUID that gets discarded — should log
     discard_logs = [r for r in caplog.records if "discarded" in r.message.lower()]
     assert len(discard_logs) >= 1
+
+
+def test_now_always_uses_plus_zero_offset():
+    """_now() must always produce +00:00 suffix, never Z."""
+    from chatnut.db import _now
+    timestamp = _now()
+    assert timestamp.endswith("+00:00"), f"Expected +00:00 suffix, got: {timestamp}"
+    assert "Z" not in timestamp
+    assert "T" in timestamp  # ISO 8601 format
+
+
+def test_now_roundtrip_string_comparison():
+    """Timestamps from _now() must compare correctly as strings."""
+    import time as time_mod
+    from chatnut.db import _now
+    t1 = _now()
+    time_mod.sleep(0.01)
+    t2 = _now()
+    assert t2 > t1  # String comparison must be chronological

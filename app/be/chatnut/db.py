@@ -35,7 +35,13 @@ def _row_to_message(row: tuple) -> Message:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    """Return current UTC time in ISO 8601 format with explicit +00:00 offset.
+
+    Uses strftime to guarantee the +00:00 suffix. datetime.isoformat() also produces
+    this for UTC-aware datetimes, but an explicit format string makes the contract
+    visible and prevents accidental regressions.
+    """
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f+00:00")
 
 
 def _new_id() -> str:
@@ -289,7 +295,7 @@ def auto_archive_stale_rooms(conn: sqlite3.Connection, max_inactive_seconds: int
     """
     cutoff = datetime.fromtimestamp(
         datetime.now(timezone.utc).timestamp() - max_inactive_seconds, tz=timezone.utc
-    ).isoformat()
+    ).strftime("%Y-%m-%dT%H:%M:%S.%f+00:00")
     now = _now()
 
     # Find live rooms where last activity is before cutoff
