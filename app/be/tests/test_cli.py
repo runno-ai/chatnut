@@ -295,3 +295,61 @@ class TestEnsureServer:
              patch("chatnut.cli.time.sleep"):
             with pytest.raises(RuntimeError, match="Failed to start"):
                 _ensure_server()
+
+    def test_ensure_server_acquires_flock(self, tmp_path, monkeypatch):
+        """_ensure_server acquires fcntl.flock(LOCK_EX) on lock file."""
+        monkeypatch.setenv("CHATNUT_RUN_DIR", str(tmp_path))
+
+        from chatnut.cli import _ensure_server
+
+        def fake_popen(*args, **kwargs):
+            (tmp_path / "server.port").write_text("8888")
+            return MagicMock()
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+
+        import fcntl
+        flock_calls = []
+        original_flock = fcntl.flock
+
+        def tracking_flock(fd, operation):
+            flock_calls.append(operation)
+            return original_flock(fd, operation)
+
+        with patch("chatnut.cli.subprocess.Popen", side_effect=fake_popen), \
+             patch("chatnut.cli.httpx.get", side_effect=[
+                 httpx.ConnectError("refused"),
+                 mock_resp,
+             ]), \
+             patch("chatnut.cli.time.sleep"), \
+             patch("chatnut.cli.fcntl.flock", side_effect=tracking_flock):
+            _ensure_server()
+
+        assert (tmp_path / "server.lock").exists()
+        # Verify LOCK_EX was acquired and LOCK_UN was released
+        assert fcntl.LOCK_EX in flock_calls
+        assert fcntl.LOCK_UN in flock_calls
+
+    def test_ensure_server_lock_file_created(self, tmp_path, monkeypatch):
+        """_ensure_server creates a lock file for flock coordination."""
+        monkeypatch.setenv("CHATNUT_RUN_DIR", str(tmp_path))
+
+        from chatnut.cli import _ensure_server
+
+        def fake_popen(*args, **kwargs):
+            (tmp_path / "server.port").write_text("8888")
+            return MagicMock()
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+
+        with patch("chatnut.cli.subprocess.Popen", side_effect=fake_popen), \
+             patch("chatnut.cli.httpx.get", side_effect=[
+                 httpx.ConnectError("refused"),
+                 mock_resp,
+             ]), \
+             patch("chatnut.cli.time.sleep"):
+            _ensure_server()
+
+        assert (tmp_path / "server.lock").exists()
