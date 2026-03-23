@@ -77,9 +77,10 @@ class ChatService:
             raise ValueError(f"Room '{room}' in project '{project}' not found — use init_room() to create it first")
         if room_obj.status == "archived":
             raise ValueError(f"Room '{room}' in project '{project}' is archived — cannot post messages")
+        mentions = self._detect_mentions(room_obj.id, content)
         msg = insert_message(self.db, room_obj.id, sender, content, message_type=message_type)
         result = msg.to_dict()
-        result["mentions"] = self._detect_mentions(room_obj.id, content)
+        result["mentions"] = mentions
         return result
 
     def post_message_by_room_id(
@@ -96,9 +97,10 @@ class ChatService:
             raise ValueError(f"Room '{room_id}' not found")
         if room_obj.status == "archived":
             raise ValueError(f"Room '{room_obj.name}' is archived — cannot post messages")
+        mentions = self._detect_mentions(room_id, content)
         msg = insert_message(self.db, room_id, sender, content, message_type=message_type)
         result = msg.to_dict()
-        result["mentions"] = self._detect_mentions(room_id, content)
+        result["mentions"] = mentions
         return result
 
     def read_messages(

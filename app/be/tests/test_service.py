@@ -752,8 +752,10 @@ def test_post_message_detects_multiple_mentions(db):
     svc.register_agent(room["id"], "security", "task-abc")
     svc.register_agent(room["id"], "architect", "task-def")
     result = svc.post_message_by_room_id(room["id"], "pm", "@security @architect check this")
-    names = {m["name"] for m in result["mentions"]}
-    assert names == {"security", "architect"}
+    assert {(m["name"], m["task_id"]) for m in result["mentions"]} == {
+        ("security", "task-abc"),
+        ("architect", "task-def"),
+    }
 
 
 def test_post_message_skips_unregistered_mentions(db):

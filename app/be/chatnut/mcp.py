@@ -399,11 +399,12 @@ def register_agent(room_id: str, agent_name: str, task_id: str) -> dict:
 
     Args:
         room_id: The room UUID returned by init_room.
-        agent_name: The agent's role name used in @mentions (e.g., "security", "architect").
-        task_id: The CC agent/task name to SendMessage to when @mentioned.
+        agent_name: Mention name used in @mentions after strip/lower normalization.
+            Must contain only letters, numbers, underscores, or hyphens.
+        task_id: Non-empty CC agent/task name to SendMessage to when @mentioned.
 
     Raises:
-        ValueError: If the room does not exist or is archived.
+        ValueError: If agent_name/task_id is invalid, or if the room does not exist or is archived.
     """
     svc = _get_service()
     with svc.lock:
