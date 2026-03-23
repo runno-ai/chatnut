@@ -142,6 +142,7 @@ def delete_room(conn: sqlite3.Connection, room_id: str) -> int:
         msg_count = msg_cursor.rowcount
         delete_read_cursors(conn, room_id)
         delete_room_statuses(conn, room_id)
+        delete_agent_registrations(conn, room_id)
         conn.execute("DELETE FROM rooms WHERE id=?", (room_id,))
     return msg_count
 
@@ -421,6 +422,44 @@ def delete_room_statuses(conn: sqlite3.Connection, room_id: str) -> None:
     """Delete all statuses for a room."""
     with conn:
         conn.execute("DELETE FROM room_status WHERE room_id = ?", (room_id,))
+
+
+def upsert_agent_registration(
+    conn: sqlite3.Connection,
+    room_id: str,
+    agent_name: str,
+    task_id: str,
+) -> dict:
+    """Register or update an agent's task_id in a room."""
+    now = _now()
+    with conn:
+        conn.execute(
+            """INSERT INTO agent_registry (room_id, agent_name, task_id, registered_at)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(room_id, agent_name) DO UPDATE
+               SET task_id = excluded.task_id, registered_at = excluded.registered_at""",
+            (room_id, agent_name, task_id, now),
+        )
+    return {"room_id": room_id, "agent_name": agent_name, "task_id": task_id, "registered_at": now}
+
+
+def get_agent_registrations(conn: sqlite3.Connection, room_id: str) -> list[dict]:
+    """Get all registered agents for a room."""
+    rows = conn.execute(
+        "SELECT room_id, agent_name, task_id, registered_at FROM agent_registry WHERE room_id = ? ORDER BY agent_name",
+        (room_id,),
+    ).fetchall()
+    return [
+        {"room_id": r[0], "agent_name": r[1], "task_id": r[2], "registered_at": r[3]}
+        for r in rows
+    ]
+
+
+def delete_agent_registrations(conn: sqlite3.Connection, room_id: str) -> None:
+    """Delete all agent registrations for a room. Explicit cleanup consistent with
+    delete_read_cursors/delete_room_statuses pattern (CASCADE also handles this)."""
+    with conn:
+        conn.execute("DELETE FROM agent_registry WHERE room_id = ?", (room_id,))
 
 
 def search_rooms_and_messages(
