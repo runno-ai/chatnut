@@ -6,10 +6,10 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 
-logger = logging.getLogger(__name__)
-
 from chatnut.models import Room, Message
 from chatnut.migrate import run_migrations
+
+logger = logging.getLogger(__name__)
 
 ROOM_COLUMNS = ["id", "name", "project", "branch", "description", "status", "created_at", "archived_at", "metadata"]
 MSG_COLUMNS = ["id", "room_id", "sender", "content", "message_type", "created_at", "metadata"]
