@@ -23,7 +23,7 @@ Cycle: docs/cycles/2026-03-23-mcp-21-22-backend-reliability/
 |---|-----------|-------|----------|-------|----------------|
 | 1 | 0         | 6     | 21       | 0     | 0              |
 
-##Final Status
+## Final Status
 
 - CI: All passing (Backend Tests, Frontend, CodeRabbit)
 - CodeRabbit: All addressed (6 fixed, 21 rejected)
@@ -32,7 +32,7 @@ Cycle: docs/cycles/2026-03-23-mcp-21-22-backend-reliability/
 - Deferred issues: 0
 - Result: **CLEAN**
 
-##Issues Fixed (6)
+## Issues Fixed (6)
 
 | # | Source | File | Summary |
 |---|--------|------|---------|
@@ -43,13 +43,13 @@ Cycle: docs/cycles/2026-03-23-mcp-21-22-backend-reliability/
 | 5 | inline | working-scope.md | Updated issue statuses from Backlog to In Review |
 | 6 | inline | working-scope.md | Renamed affected_crates to affected_files |
 
-##Issues Rejected (21)
+## Issues Rejected (21)
 
 Mostly PR summary boilerplate suggestions (platform guards, deployment guides, staging tests, NFS warnings) that don't apply to this local dev tool. Two inline rejections:
 - Lock file handle leak on early return — technically incorrect (Python finally runs on return)
 - Symbol-only lock test — behavior already exercised by 19 tests in test_wait_for_messages.py
 
-##Changes Delivered
+## Changes Delivered
 
 | Issue | Title | Commits |
 |-------|-------|---------|
@@ -66,7 +66,7 @@ Mostly PR summary boilerplate suggestions (platform guards, deployment guides, s
 2. `create_room()` logs at DEBUG level when UUID is discarded on idempotent create
 3. `_now()` hardened with explicit `strftime` for `+00:00` format, `auto_archive_stale_rooms` cutoff made consistent
 
-##Test Coverage
+## Test Coverage
 
 - 298 tests total (8 new tests added)
 - All passing
