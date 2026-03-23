@@ -417,7 +417,7 @@ def register_agent(room_id: str, agent_name: str, task_id: str) -> dict:
         ValueError: If agent_name/task_id is invalid, or if the room does not exist or is archived.
     """
     svc = _get_service()
-    with svc.lock:
+    with _wait_notify_lock:
         return svc.register_agent(room_id, agent_name, task_id)
 
 

@@ -670,7 +670,6 @@ def test_update_status_too_long(db):
         svc.update_status(room["id"], "alice", "x" * 501)
 
 
-<<<<<<< HEAD
 # --- Agent Registration & Mention Detection ---
 
 
