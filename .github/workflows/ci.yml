@@ -43,8 +43,8 @@ jobs:
       - name: Audit dependencies
         shell: bash
         run: |
-          uv pip compile pyproject.toml --extra test -o /tmp/audit-reqs.txt 2>/dev/null || true
-          uvx pip-audit --requirement /tmp/audit-reqs.txt || true
+          uv pip compile pyproject.toml --extra test -o /tmp/audit-reqs.txt || true
+          uvx pip-audit --requirement /tmp/audit-reqs.txt
 
   frontend:
     name: Frontend
