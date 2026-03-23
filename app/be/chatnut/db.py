@@ -430,7 +430,11 @@ def upsert_agent_registration(
     agent_name: str,
     task_id: str,
 ) -> dict:
-    """Register or update an agent's task_id in a room."""
+    """Register or update an agent's task_id in a room.
+
+    agent_name is normalized to lowercase for case-insensitive matching.
+    """
+    agent_name = agent_name.strip().lower()
     now = _now()
     with conn:
         conn.execute(
