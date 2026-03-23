@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import threading
 from collections import defaultdict
 from collections.abc import Callable
 from pathlib import Path
@@ -29,6 +30,15 @@ _loop: asyncio.AbstractEventLoop | None = None
 
 # Maximum concurrent waiters per room — prevents DoS via connection flooding
 MAX_WAITERS_PER_ROOM = 100
+
+# Serializes post_message insert+notify with wait_for_messages' _read() closure.
+# This ensures that a message inserted by post_message is visible to _read() before
+# _notify_waiters fires. Without this lock, _read() could execute between INSERT and
+# notify, see no new messages, then miss the notification.
+# Only used in post_message() and wait_for_messages() — other write paths don't need it
+# because they don't interact with the waiter notification system.
+# Intentionally module-level (not per-ChatService): one server process = one lock.
+_wait_notify_lock = threading.Lock()
 
 
 def set_service_factory(factory: Callable[[], ChatService]) -> None:
@@ -190,7 +200,7 @@ def post_message(
         ValueError: If the room is archived or does not exist.
     """
     svc = _get_service()
-    with svc.lock:
+    with _wait_notify_lock:
         result = svc.post_message_by_room_id(room_id, sender, content, message_type=message_type)
     _notify_waiters(room_id)  # only reached on successful insert
     return result
@@ -262,7 +272,7 @@ async def wait_for_messages(
         svc = _get_service()
 
         def _read():
-            with svc.lock:
+            with _wait_notify_lock:
                 return svc.read_messages_by_room_id(
                     room_id, since_id=since_id, limit=limit, message_type=message_type
                 )

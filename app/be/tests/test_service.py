@@ -670,6 +670,7 @@ def test_update_status_too_long(db):
         svc.update_status(room["id"], "alice", "x" * 501)
 
 
+<<<<<<< HEAD
 # --- Agent Registration & Mention Detection ---
 
 
@@ -875,3 +876,10 @@ def test_list_agents_archived_room_allowed(db):
     assert len(result["agents"]) == 1
     assert result["agents"][0]["agent_name"] == "security"
     assert result["agents"][0]["task_id"] == "task-abc"
+=======
+def test_chat_service_no_lock_attribute(db):
+    """ChatService should not expose a generic 'lock' attribute."""
+    from chatnut.service import ChatService
+    svc = ChatService(db)
+    assert not hasattr(svc, "lock")
+>>>>>>> 33c3829 (refactor(mcp): rename svc.lock to _wait_notify_lock, move to mcp.py (MCP-21))
