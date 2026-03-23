@@ -1,9 +1,12 @@
 """SQLite schema, migrations, and queries for team chat."""
 
+import logging
 import os
 import sqlite3
 import uuid
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 from chatnut.models import Room, Message
 from chatnut.migrate import run_migrations
@@ -66,7 +69,13 @@ def create_room(
         _room_select() + " WHERE project=? AND name=?",
         (project, name),
     ).fetchone()
-    return _row_to_room(row)
+    room = _row_to_room(row)
+    if room.id != room_id:
+        logger.debug(
+            "create_room: room '%s/%s' already exists (id=%s), discarded generated UUID %s",
+            project, name, room.id, room_id,
+        )
+    return room
 
 
 def get_room(conn: sqlite3.Connection, project: str, name: str) -> Room | None:

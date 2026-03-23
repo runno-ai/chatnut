@@ -588,3 +588,16 @@ def test_messages_cascade_on_room_delete(db):
     # Messages should be gone via CASCADE
     msgs, _ = get_messages(db, room.id)
     assert len(msgs) == 0
+
+
+def test_create_room_idempotent_logs_discarded_uuid(db, caplog):
+    """create_room logs at DEBUG level when a generated UUID is discarded."""
+    import logging
+    with caplog.at_level(logging.DEBUG):
+        r1 = create_room(db, project="proj", name="dedup-test")
+        r2 = create_room(db, project="proj", name="dedup-test")
+
+    assert r1.id == r2.id
+    # The second call generates a new UUID that gets discarded — should log
+    discard_logs = [r for r in caplog.records if "discarded" in r.message.lower()]
+    assert len(discard_logs) >= 1
