@@ -853,8 +853,10 @@ def test_list_agents(db):
     svc.register_agent(room["id"], "architect", "task-def")
     result = svc.list_agents(room["id"])
     assert len(result["agents"]) == 2
-    names = {a["agent_name"] for a in result["agents"]}
-    assert names == {"security", "architect"}
+    assert {(a["agent_name"], a["task_id"]) for a in result["agents"]} == {
+        ("security", "task-abc"),
+        ("architect", "task-def"),
+    }
 
 
 def test_list_agents_nonexistent_room(db):
