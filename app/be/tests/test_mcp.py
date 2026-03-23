@@ -359,7 +359,6 @@ def test_mcp_get_team_status(db, monkeypatch):
     assert senders == {"agent-1", "agent-2"}
 
 
-<<<<<<< HEAD
 def test_register_agent_tool(db):
     from chatnut import mcp as mcp_module
     from chatnut.service import ChatService
@@ -410,11 +409,11 @@ def test_post_message_returns_mentions(db):
         mcp_module.set_service_factory(original)
 
     assert result["mentions"] == [{"name": "security", "task_id": "task-abc"}]
-=======
+
+
 def test_wait_notify_lock_exists():
     """mcp module should expose _wait_notify_lock for post/wait synchronization."""
     from chatnut import mcp
     assert hasattr(mcp, "_wait_notify_lock")
     import threading
     assert isinstance(mcp._wait_notify_lock, type(threading.Lock()))
->>>>>>> 33c3829 (refactor(mcp): rename svc.lock to _wait_notify_lock, move to mcp.py (MCP-21))

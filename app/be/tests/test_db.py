@@ -571,3 +571,20 @@ def test_agent_registrations_cascade_on_room_delete(db):
         db.execute("DELETE FROM rooms WHERE id=?", (room.id,))
     row = db.execute("SELECT COUNT(*) FROM agent_registry WHERE room_id=?", (room.id,)).fetchone()
     assert row[0] == 0
+
+
+def test_messages_cascade_on_room_delete(db):
+    """Messages should be automatically deleted when their room is deleted via CASCADE."""
+    room = create_room(db, project="proj", name="cascade-test")
+    insert_message(db, room.id, "alice", "hello")
+    insert_message(db, room.id, "bob", "world")
+
+    # Archive then delete directly via SQL to test CASCADE behavior
+    db.execute("UPDATE rooms SET status='archived', archived_at=datetime('now') WHERE id=?", (room.id,))
+    db.commit()
+    db.execute("DELETE FROM rooms WHERE id=?", (room.id,))
+    db.commit()
+
+    # Messages should be gone via CASCADE
+    msgs, _ = get_messages(db, room.id)
+    assert len(msgs) == 0

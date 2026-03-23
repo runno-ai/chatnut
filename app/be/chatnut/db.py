@@ -136,13 +136,17 @@ def archive_room(conn: sqlite3.Connection, project: str, name: str) -> Room | No
 
 
 def delete_room(conn: sqlite3.Connection, room_id: str) -> int:
-    """Delete a room and all its messages. Returns number of messages deleted."""
+    """Delete a room and all its messages. Returns number of messages deleted.
+
+    Messages, read cursors, and room statuses are deleted via ON DELETE CASCADE.
+    We count messages before deletion for the return value.
+    Note: TOCTOU between COUNT and DELETE is harmless — archived rooms reject
+    new messages at the service layer, so the count cannot increase.
+    """
     with conn:
-        msg_cursor = conn.execute("DELETE FROM messages WHERE room_id=?", (room_id,))
-        msg_count = msg_cursor.rowcount
-        delete_read_cursors(conn, room_id)
-        delete_room_statuses(conn, room_id)
-        delete_agent_registrations(conn, room_id)
+        msg_count = conn.execute(
+            "SELECT COUNT(*) FROM messages WHERE room_id=?", (room_id,)
+        ).fetchone()[0]
         conn.execute("DELETE FROM rooms WHERE id=?", (room_id,))
     return msg_count
 
