@@ -244,9 +244,13 @@ class ChatService:
         """Register an agent's task_id in a room for @mention notifications.
 
         agent_name is normalized to lowercase (strip + lower) for case-insensitive matching.
+        Must match the mention regex pattern (letters, digits, underscores, hyphens).
         """
         if not agent_name or not agent_name.strip():
             raise ValueError("agent_name must be a non-empty string")
+        normalized_name = agent_name.strip().lower()
+        if not re.fullmatch(r'[\w-]+', normalized_name):
+            raise ValueError("agent_name must contain only letters, numbers, underscores, or hyphens")
         if not task_id or not task_id.strip():
             raise ValueError("task_id must be a non-empty string")
         room_obj = get_room_by_id(self.db, room_id)
@@ -254,7 +258,7 @@ class ChatService:
             raise ValueError(f"Room '{room_id}' not found")
         if room_obj.status == "archived":
             raise ValueError(f"Room '{room_obj.name}' is archived — cannot register agents")
-        return upsert_agent_registration(self.db, room_id, agent_name.strip().lower(), task_id.strip())
+        return upsert_agent_registration(self.db, room_id, normalized_name, task_id.strip())
 
     def list_agents(self, room_id: str) -> dict:
         """List all registered agents in a room.

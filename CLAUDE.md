@@ -328,7 +328,7 @@ The dev start script (`~/.claude/skills/chatnut/start-server-dev.sh`) sets `CHAT
 - **SSE for push** — unidirectional, auto-reconnect, Last-Event-Id for resume
 - **`get_all_room_stats()` batch for SSE** — 3 queries total (not 3N per-room) via batch COUNT/MAX/GROUP BY
 - **`_escape_like()` for search** — escapes SQL LIKE wildcards in user input
-- **No ORM** — direct sqlite3, schema is 4 tables (rooms, messages, read_cursors, room_status)
+- **No ORM** — direct sqlite3, schema is 5 tables (rooms, messages, read_cursors, room_status, agent_registry)
 - **`since_id` for incremental reads** — agents poll with last-seen message ID
 - **Read cursors for unread tracking** — `(room_id, reader)` PK, forward-only via `MAX()` in UPSERT, `ON DELETE CASCADE` for cleanup
 - **`wait_for_messages` for agent blocking** — asyncio.Queue per waiter; `post_message` notifies via `call_soon_threadsafe(_wake_all)` (all `_waiters` access event-loop-only); zero DB reads while waiting; agents call once instead of polling in a loop; timeout capped at 60s

@@ -731,6 +731,13 @@ def test_register_agent_whitespace_task_id(db):
         svc.register_agent(room["id"], "security", "   ")
 
 
+def test_register_agent_invalid_name_with_spaces(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    with pytest.raises(ValueError, match="letters, numbers, underscores, or hyphens"):
+        svc.register_agent(room["id"], "QA Team", "task-abc")
+
+
 def test_post_message_detects_single_mention(db):
     svc = ChatService(db)
     room = svc.init_room("proj", "dev")

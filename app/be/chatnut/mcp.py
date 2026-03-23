@@ -397,9 +397,6 @@ def register_agent(room_id: str, agent_name: str, task_id: str) -> dict:
     UPSERT semantics — re-registering with a different task_id replaces the old one.
     agent_name is normalized to lowercase for case-insensitive matching.
 
-    Note: this tool does not acquire svc.lock. Agent registration happens during room
-    setup (before active messaging), so lock contention with post_message is not a concern.
-
     Args:
         room_id: The room UUID returned by init_room.
         agent_name: The agent's role name used in @mentions (e.g., "security", "architect").
@@ -408,7 +405,9 @@ def register_agent(room_id: str, agent_name: str, task_id: str) -> dict:
     Raises:
         ValueError: If the room does not exist or is archived.
     """
-    return _get_service().register_agent(room_id, agent_name, task_id)
+    svc = _get_service()
+    with svc.lock:
+        return svc.register_agent(room_id, agent_name, task_id)
 
 
 @mcp.tool()
