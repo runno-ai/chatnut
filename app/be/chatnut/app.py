@@ -83,6 +83,11 @@ async def app_lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Ensure service is initialized at startup
     _get_service()
     mcp_module.set_event_loop(asyncio.get_running_loop())
+    logger.info(
+        "chatnut requires single-worker mode (uvicorn only, not gunicorn multi-worker). "
+        "The wait_for_messages notification system uses process-local asyncio.Queue objects "
+        "that cannot communicate across worker processes."
+    )
     archive_task = asyncio.create_task(_auto_archive_loop())
     version_task = asyncio.create_task(_version_check_loop())
     yield
