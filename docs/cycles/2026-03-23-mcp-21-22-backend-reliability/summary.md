@@ -1,8 +1,9 @@
-## Dev Cycle Summary
+# Dev Cycle Summary
 
 Cycle: docs/cycles/2026-03-23-mcp-21-22-backend-reliability/
 
 ### Pipeline
+
 | Phase | Skill | Status |
 |-------|-------|--------|
 | 0. Triage | (built-in) | Done |
@@ -17,11 +18,13 @@ Cycle: docs/cycles/2026-03-23-mcp-21-22-backend-reliability/
 - Ship iterations: 1 of 5 max
 
 ### Iteration History
+
 | # | Issues In | Fixed | Rejected | Stuck | New After Sync |
 |---|-----------|-------|----------|-------|----------------|
 | 1 | 0         | 6     | 21       | 0     | 0              |
 
 ### Final Status
+
 - CI: All passing (Backend Tests, Frontend, CodeRabbit)
 - CodeRabbit: All addressed (6 fixed, 21 rejected)
 - Open issues: 0 actionable
@@ -30,6 +33,7 @@ Cycle: docs/cycles/2026-03-23-mcp-21-22-backend-reliability/
 - Result: **CLEAN**
 
 ### Issues Fixed (6)
+
 | # | Source | File | Summary |
 |---|--------|------|---------|
 | 1 | outside_diff | CLAUDE.md | Updated Schema to show ON DELETE CASCADE on messages FK |
@@ -40,11 +44,13 @@ Cycle: docs/cycles/2026-03-23-mcp-21-22-backend-reliability/
 | 6 | inline | working-scope.md | Renamed affected_crates to affected_files |
 
 ### Issues Rejected (21)
+
 Mostly PR summary boilerplate suggestions (platform guards, deployment guides, staging tests, NFS warnings) that don't apply to this local dev tool. Two inline rejections:
 - Lock file handle leak on early return — technically incorrect (Python finally runs on return)
 - Symbol-only lock test — behavior already exercised by 19 tests in test_wait_for_messages.py
 
 ### Changes Delivered
+
 | Issue | Title | Commits |
 |-------|-------|---------|
 | MCP-21 | Server startup race condition and lock clarity | 3 commits |
@@ -61,5 +67,6 @@ Mostly PR summary boilerplate suggestions (platform guards, deployment guides, s
 3. `_now()` hardened with explicit `strftime` for `+00:00` format, `auto_archive_stale_rooms` cutoff made consistent
 
 ### Test Coverage
+
 - 298 tests total (8 new tests added)
 - All passing
