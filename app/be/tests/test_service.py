@@ -668,3 +668,175 @@ def test_update_status_too_long(db):
     room = svc.init_room("proj", "dev")
     with pytest.raises(ValueError, match="500 characters"):
         svc.update_status(room["id"], "alice", "x" * 501)
+
+
+# --- Agent Registration & Mention Detection ---
+
+
+def test_register_agent(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    result = svc.register_agent(room["id"], "security", "task-abc")
+    assert result["agent_name"] == "security"
+    assert result["task_id"] == "task-abc"
+
+
+def test_register_agent_normalizes_name(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.register_agent(room["id"], "  Security  ", "task-abc")
+    result = svc.list_agents(room["id"])
+    assert result["agents"][0]["agent_name"] == "security"
+
+
+def test_register_agent_nonexistent_room(db):
+    svc = ChatService(db)
+    with pytest.raises(ValueError, match="not found"):
+        svc.register_agent("nonexistent-id", "security", "task-abc")
+
+
+def test_register_agent_archived_room(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.archive_room("proj", "dev")
+    with pytest.raises(ValueError, match="archived"):
+        svc.register_agent(room["id"], "security", "task-abc")
+
+
+def test_register_agent_empty_name(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    with pytest.raises(ValueError, match="agent_name"):
+        svc.register_agent(room["id"], "", "task-abc")
+
+
+def test_register_agent_empty_task_id(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    with pytest.raises(ValueError, match="task_id"):
+        svc.register_agent(room["id"], "security", "")
+
+
+def test_post_message_detects_single_mention(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.register_agent(room["id"], "security", "task-abc")
+    result = svc.post_message_by_room_id(room["id"], "pm", "@security please review")
+    assert result["mentions"] == [{"name": "security", "task_id": "task-abc"}]
+
+
+def test_post_message_detects_multiple_mentions(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.register_agent(room["id"], "security", "task-abc")
+    svc.register_agent(room["id"], "architect", "task-def")
+    result = svc.post_message_by_room_id(room["id"], "pm", "@security @architect check this")
+    names = {m["name"] for m in result["mentions"]}
+    assert names == {"security", "architect"}
+
+
+def test_post_message_skips_unregistered_mentions(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.register_agent(room["id"], "security", "task-abc")
+    result = svc.post_message_by_room_id(room["id"], "pm", "@security @unknown check this")
+    assert len(result["mentions"]) == 1
+    assert result["mentions"][0]["name"] == "security"
+
+
+def test_post_message_no_mentions_returns_empty(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    result = svc.post_message_by_room_id(room["id"], "pm", "no mentions here")
+    assert result["mentions"] == []
+
+
+def test_post_message_mention_in_middle(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.register_agent(room["id"], "backend-dev", "task-xyz")
+    result = svc.post_message_by_room_id(room["id"], "pm", "hey @backend-dev can you check?")
+    assert result["mentions"] == [{"name": "backend-dev", "task_id": "task-xyz"}]
+
+
+def test_post_message_deduplicates_mentions(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.register_agent(room["id"], "security", "task-abc")
+    result = svc.post_message_by_room_id(room["id"], "pm", "@security @security please review")
+    assert len(result["mentions"]) == 1
+
+
+def test_post_message_mention_case_insensitive(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.register_agent(room["id"], "security", "task-abc")
+    result = svc.post_message_by_room_id(room["id"], "pm", "@Security please review")
+    assert result["mentions"] == [{"name": "security", "task_id": "task-abc"}]
+
+
+def test_post_message_no_false_mention_in_email(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.register_agent(room["id"], "example", "task-abc")
+    result = svc.post_message_by_room_id(room["id"], "pm", "contact user@example.com for details")
+    assert result["mentions"] == []
+
+
+def test_post_message_no_false_mention_hello_at_name(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.register_agent(room["id"], "name", "task-abc")
+    result = svc.post_message_by_room_id(room["id"], "pm", "Hello@name how are you")
+    assert result["mentions"] == []
+
+
+def test_post_message_mention_after_newline(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.register_agent(room["id"], "security", "task-abc")
+    result = svc.post_message_by_room_id(room["id"], "pm", "first line\n@security check this")
+    assert result["mentions"] == [{"name": "security", "task_id": "task-abc"}]
+
+
+def test_post_message_mention_after_punctuation(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.register_agent(room["id"], "security", "task-abc")
+    result = svc.post_message_by_room_id(room["id"], "pm", "(@security) check this")
+    assert result["mentions"] == [{"name": "security", "task_id": "task-abc"}]
+
+
+def test_post_message_by_name_also_detects_mentions(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.register_agent(room["id"], "security", "task-abc")
+    result = svc.post_message("proj", "dev", "pm", "@security check this")
+    assert result["mentions"] == [{"name": "security", "task_id": "task-abc"}]
+
+
+def test_list_agents(db):
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.register_agent(room["id"], "security", "task-abc")
+    svc.register_agent(room["id"], "architect", "task-def")
+    result = svc.list_agents(room["id"])
+    assert len(result["agents"]) == 2
+    names = {a["agent_name"] for a in result["agents"]}
+    assert names == {"security", "architect"}
+
+
+def test_list_agents_nonexistent_room(db):
+    svc = ChatService(db)
+    with pytest.raises(ValueError, match="not found"):
+        svc.list_agents("nonexistent-id")
+
+
+def test_list_agents_archived_room_allowed(db):
+    """list_agents is a read-only operation — archived rooms are allowed."""
+    svc = ChatService(db)
+    room = svc.init_room("proj", "dev")
+    svc.register_agent(room["id"], "security", "task-abc")
+    svc.archive_room("proj", "dev")
+    result = svc.list_agents(room["id"])
+    assert len(result["agents"]) == 1

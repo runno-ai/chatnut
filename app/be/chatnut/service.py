@@ -1,5 +1,6 @@
 """ChatService — all business logic for team chatrooms."""
 
+import re
 import sqlite3
 import threading
 
@@ -23,11 +24,14 @@ from chatnut.db import (
     upsert_room_status,
     get_room_statuses,
     delete_room_statuses,
+    upsert_agent_registration,
+    get_agent_registrations,
 )
 
 
 VALID_ROOM_STATUSES = {"live", "archived", "all"}
 VALID_MESSAGE_TYPES = {"message", "system"}
+_MENTION_RE = re.compile(r'(?<!\w)@([\w-]+)')
 
 
 class ChatService:
@@ -74,7 +78,9 @@ class ChatService:
         if room_obj.status == "archived":
             raise ValueError(f"Room '{room}' in project '{project}' is archived — cannot post messages")
         msg = insert_message(self.db, room_obj.id, sender, content, message_type=message_type)
-        return msg.to_dict()
+        result = msg.to_dict()
+        result["mentions"] = self._detect_mentions(room_obj.id, content)
+        return result
 
     def post_message_by_room_id(
         self,
@@ -91,7 +97,9 @@ class ChatService:
         if room_obj.status == "archived":
             raise ValueError(f"Room '{room_obj.name}' is archived — cannot post messages")
         msg = insert_message(self.db, room_id, sender, content, message_type=message_type)
-        return msg.to_dict()
+        result = msg.to_dict()
+        result["mentions"] = self._detect_mentions(room_id, content)
+        return result
 
     def read_messages(
         self,
@@ -231,6 +239,45 @@ class ChatService:
         if room_obj is None:
             raise ValueError(f"Room '{room_id}' not found")
         return {"statuses": get_room_statuses(self.db, room_id)}
+
+    def register_agent(self, room_id: str, agent_name: str, task_id: str) -> dict:
+        """Register an agent's task_id in a room for @mention notifications.
+
+        agent_name is normalized to lowercase (strip + lower) for case-insensitive matching.
+        """
+        if not agent_name or not agent_name.strip():
+            raise ValueError("agent_name must be a non-empty string")
+        if not task_id or not task_id.strip():
+            raise ValueError("task_id must be a non-empty string")
+        room_obj = get_room_by_id(self.db, room_id)
+        if room_obj is None:
+            raise ValueError(f"Room '{room_id}' not found")
+        if room_obj.status == "archived":
+            raise ValueError(f"Room '{room_obj.name}' is archived — cannot register agents")
+        return upsert_agent_registration(self.db, room_id, agent_name.strip().lower(), task_id.strip())
+
+    def list_agents(self, room_id: str) -> dict:
+        """List all registered agents in a room.
+
+        Read-only — works on both live and archived rooms.
+        """
+        room_obj = get_room_by_id(self.db, room_id)
+        if room_obj is None:
+            raise ValueError(f"Room '{room_id}' not found")
+        return {"agents": get_agent_registrations(self.db, room_id)}
+
+    def _detect_mentions(self, room_id: str, content: str) -> list[dict]:
+        """Parse @mentions from content and resolve against agent registry.
+
+        Names are lowercased before lookup for case-insensitive matching.
+        Unregistered @mentions are silently skipped.
+        """
+        names = set(n.lower() for n in _MENTION_RE.findall(content))
+        if not names:
+            return []
+        registrations = get_agent_registrations(self.db, room_id)
+        registry = {r["agent_name"]: r["task_id"] for r in registrations}
+        return [{"name": name, "task_id": registry[name]} for name in sorted(names) if name in registry]
 
     def search(self, query: str, project: str | None = None) -> dict:
         if not query or not query.strip():
