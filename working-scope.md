@@ -3,16 +3,16 @@ scope: backend-reliability
 issues:
   - id: MCP-21
     title: "Backend: server startup race condition and lock clarity"
-    status: Backlog
+    status: In Review
     blocked_by: []
   - id: MCP-22
     title: "Database: schema integrity gaps (FK cascade, TOCTOU, timestamps)"
-    status: Backlog
+    status: In Review
     blocked_by: []
 execution_order:
   - [MCP-21, MCP-22]
 out_of_scope: []
-affected_crates:
+affected_files:
   - app/be/chatnut/cli.py
   - app/be/chatnut/db.py
   - app/be/chatnut/service.py
