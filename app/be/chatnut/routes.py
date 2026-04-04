@@ -1,26 +1,42 @@
 # chatnut/routes.py
 """REST + SSE endpoints for the web UI."""
 
-import anyio
+import asyncio
 import hashlib
 import json
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
+import anyio
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
+from chatnut.notify import ROOMS_CHANNEL, msg_channel, status_channel, subscribe, unsubscribe
 from chatnut.service import ChatService
 from chatnut.version_check import get_cached_version_info
 
 
-POLL_INTERVAL = 0.5
+# Per-stream poll intervals — fallback when no notification arrives.
+# Event-driven notifications wake generators instantly; these are safety nets.
+MESSAGE_POLL_INTERVAL = 0.5    # real-time messages — keep fast
+STATUS_POLL_INTERVAL = 2.0     # status changes are low-frequency
+CHATROOM_POLL_INTERVAL = 2.0   # room list changes are low-frequency
+
 KEEPALIVE_INTERVAL = 15  # seconds between keepalive comments
 
 # Thread safety: Python's sqlite3 module serializes access internally
 # (SQLITE_THREADSAFE=1 default). Combined with WAL mode + busy_timeout=5000,
 # concurrent reads from multiple SSE generators are safe without a Python-level lock.
+
+
+def _drain_queue(q: asyncio.Queue[None]) -> None:
+    """Drain all pending signals from a queue (coalesce rapid notifications)."""
+    while not q.empty():
+        try:
+            q.get_nowait()
+        except asyncio.QueueEmpty:
+            break
 
 
 async def message_event_generator(
@@ -29,38 +45,50 @@ async def message_event_generator(
     last_id: int = 0,
     is_disconnected: Callable[[], Awaitable[bool]] | None = None,
 ) -> AsyncIterator[dict]:
-    """Async generator for SSE message events.
+    """Event-driven message generator — subscribes to notifications, falls back to polling.
 
-    Yields initial history (if last_id == 0) then polls for new messages.
+    Yields initial history (if last_id == 0) then waits for notifications or poll timeout.
     DB calls are offloaded to a thread to avoid blocking the event loop.
     """
     keepalive_counter = 0
-
-    if last_id == 0:
-        result = await anyio.to_thread.run_sync(
-            lambda: svc.read_messages_by_room_id(room_id, limit=1000)
-        )
-        for msg in result["messages"]:
-            yield {"id": str(msg["id"]), "data": json.dumps(msg)}
-            last_id = msg["id"]
-
-    while True:
-        if is_disconnected and await is_disconnected():
-            break
-        result = await anyio.to_thread.run_sync(
-            lambda lid=last_id: svc.read_messages_by_room_id(room_id, since_id=lid, limit=100)
-        )
-        if result["messages"]:
-            keepalive_counter = 0
+    q = subscribe(msg_channel(room_id))
+    try:
+        if last_id == 0:
+            result = await anyio.to_thread.run_sync(
+                lambda: svc.read_messages_by_room_id(room_id, limit=1000)
+            )
             for msg in result["messages"]:
                 yield {"id": str(msg["id"]), "data": json.dumps(msg)}
                 last_id = msg["id"]
-        else:
-            keepalive_counter += 1
-            if keepalive_counter >= int(KEEPALIVE_INTERVAL / POLL_INTERVAL):
+
+        # Drain stale signals accumulated during initial history burst
+        _drain_queue(q)
+
+        while True:
+            if is_disconnected and await is_disconnected():
+                break
+
+            # Wait for notification OR fallback poll timeout
+            with anyio.move_on_after(MESSAGE_POLL_INTERVAL):
+                await q.get()
+
+            _drain_queue(q)
+
+            result = await anyio.to_thread.run_sync(
+                lambda lid=last_id: svc.read_messages_by_room_id(room_id, since_id=lid, limit=100)
+            )
+            if result["messages"]:
                 keepalive_counter = 0
-                yield {"comment": "keepalive"}
-        await anyio.sleep(POLL_INTERVAL)
+                for msg in result["messages"]:
+                    yield {"id": str(msg["id"]), "data": json.dumps(msg)}
+                    last_id = msg["id"]
+            else:
+                keepalive_counter += 1
+                if keepalive_counter >= int(KEEPALIVE_INTERVAL / MESSAGE_POLL_INTERVAL):
+                    keepalive_counter = 0
+                    yield {"comment": "keepalive"}
+    finally:
+        unsubscribe(msg_channel(room_id), q)
 
 
 async def status_event_generator(
@@ -68,36 +96,44 @@ async def status_event_generator(
     room_id: str,
     is_disconnected: Callable[[], Awaitable[bool]] | None = None,
 ) -> AsyncIterator[dict]:
-    """Async generator for SSE room status events.
+    """Event-driven status generator — subscribes to notifications, falls back to polling.
 
     Polls for status changes and yields new data when the hash changes.
     DB calls are offloaded to a thread to avoid blocking the event loop.
     """
     last_hash = ""
     keepalive_counter = 0
-    while True:
-        if is_disconnected and await is_disconnected():
-            break
+    q = subscribe(status_channel(room_id))
+    try:
+        while True:
+            if is_disconnected and await is_disconnected():
+                break
 
-        try:
-            result = await anyio.to_thread.run_sync(
-                lambda: svc.get_team_status(room_id)
-            )
-        except ValueError:
-            break
-        payload = json.dumps(result, sort_keys=True)
-        content_hash = hashlib.sha256(payload.encode()).hexdigest()
-        if content_hash != last_hash:
-            last_hash = content_hash
-            keepalive_counter = 0
-            yield {"data": payload}
-        else:
-            keepalive_counter += 1
-            if keepalive_counter >= int(KEEPALIVE_INTERVAL / POLL_INTERVAL):
+            try:
+                result = await anyio.to_thread.run_sync(
+                    lambda: svc.get_team_status(room_id)
+                )
+            except ValueError:
+                break
+            payload = json.dumps(result, sort_keys=True)
+            content_hash = hashlib.sha256(payload.encode()).hexdigest()
+            if content_hash != last_hash:
+                last_hash = content_hash
                 keepalive_counter = 0
-                yield {"comment": "keepalive"}
+                yield {"data": payload}
+            else:
+                keepalive_counter += 1
+                if keepalive_counter >= int(KEEPALIVE_INTERVAL / STATUS_POLL_INTERVAL):
+                    keepalive_counter = 0
+                    yield {"comment": "keepalive"}
 
-        await anyio.sleep(POLL_INTERVAL)
+            # Wait for notification OR fallback poll timeout
+            with anyio.move_on_after(STATUS_POLL_INTERVAL):
+                await q.get()
+
+            _drain_queue(q)
+    finally:
+        unsubscribe(status_channel(room_id), q)
 
 
 async def chatroom_event_generator(
@@ -107,7 +143,7 @@ async def chatroom_event_generator(
     reader: str | None = None,
     is_disconnected: Callable[[], Awaitable[bool]] | None = None,
 ) -> AsyncIterator[dict]:
-    """Async generator for SSE chatroom list events.
+    """Event-driven chatroom list generator — subscribes to notifications, falls back to polling.
 
     Uses batch stats query (3 queries total) instead of per-room stats (3N queries).
     DB calls are offloaded to a single thread hop per poll cycle.
@@ -115,48 +151,54 @@ async def chatroom_event_generator(
     """
     last_hash = ""
     keepalive_counter = 0
-    while True:
-        if is_disconnected and await is_disconnected():
-            break
+    q = subscribe(ROOMS_CHANNEL)
+    try:
+        while True:
+            if is_disconnected and await is_disconnected():
+                break
 
-        # Single thread hop: list rooms + batch stats + unread counts together
-        # CRITICAL: get_unread_counts must run inside this closure (thread context)
-        # because SQLite connections are not safe to use across async boundaries.
-        def _fetch_rooms_with_stats() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, int]]:
-            result = svc.list_rooms(status="all", project=project, branch=branch)
-            rooms = result["rooms"]
-            room_ids = [r["id"] for r in rooms]
-            stats = svc.get_all_room_stats(room_ids) if room_ids else {}
-            unread = svc.get_unread_counts(room_ids, reader) if reader and room_ids else {}
-            return rooms, stats, unread
+            # Single thread hop: list rooms + batch stats + unread counts together
+            def _fetch_rooms_with_stats() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, int]]:
+                result = svc.list_rooms(status="all", project=project, branch=branch)
+                rooms = result["rooms"]
+                room_ids = [r["id"] for r in rooms]
+                stats = svc.get_all_room_stats(room_ids) if room_ids else {}
+                unread = svc.get_unread_counts(room_ids, reader) if reader and room_ids else {}
+                return rooms, stats, unread
 
-        rooms, all_stats, unread_counts = await anyio.to_thread.run_sync(_fetch_rooms_with_stats)
-        active = [r for r in rooms if r["status"] == "live"]
-        archived = [r for r in rooms if r["status"] == "archived"]
+            rooms, all_stats, unread_counts = await anyio.to_thread.run_sync(_fetch_rooms_with_stats)
+            active = [r for r in rooms if r["status"] == "live"]
+            archived = [r for r in rooms if r["status"] == "archived"]
 
-        # Enrich rooms with stats
-        for room_dict in active + archived:
-            stats = all_stats.get(room_dict["id"], {})
-            room_dict["messageCount"] = stats.get("message_count", 0)
-            room_dict["lastMessage"] = stats.get("last_message_content")
-            room_dict["lastMessageTs"] = stats.get("last_message_ts")
-            room_dict["roleCounts"] = stats.get("role_counts", {})
-            if reader:
-                room_dict["unreadCount"] = unread_counts.get(room_dict["id"], 0)
+            # Enrich rooms with stats
+            for room_dict in active + archived:
+                stats = all_stats.get(room_dict["id"], {})
+                room_dict["messageCount"] = stats.get("message_count", 0)
+                room_dict["lastMessage"] = stats.get("last_message_content")
+                room_dict["lastMessageTs"] = stats.get("last_message_ts")
+                room_dict["roleCounts"] = stats.get("role_counts", {})
+                if reader:
+                    room_dict["unreadCount"] = unread_counts.get(room_dict["id"], 0)
 
-        payload = json.dumps({"active": active, "archived": archived}, sort_keys=True)
-        content_hash = hashlib.sha256(payload.encode()).hexdigest()
-        if content_hash != last_hash:
-            last_hash = content_hash
-            keepalive_counter = 0
-            yield {"data": payload}
-        else:
-            keepalive_counter += 1
-            if keepalive_counter >= int(KEEPALIVE_INTERVAL / POLL_INTERVAL):
+            payload = json.dumps({"active": active, "archived": archived}, sort_keys=True)
+            content_hash = hashlib.sha256(payload.encode()).hexdigest()
+            if content_hash != last_hash:
+                last_hash = content_hash
                 keepalive_counter = 0
-                yield {"comment": "keepalive"}
+                yield {"data": payload}
+            else:
+                keepalive_counter += 1
+                if keepalive_counter >= int(KEEPALIVE_INTERVAL / CHATROOM_POLL_INTERVAL):
+                    keepalive_counter = 0
+                    yield {"comment": "keepalive"}
 
-        await anyio.sleep(POLL_INTERVAL)
+            # Wait for notification OR fallback poll timeout
+            with anyio.move_on_after(CHATROOM_POLL_INTERVAL):
+                await q.get()
+
+            _drain_queue(q)
+    finally:
+        unsubscribe(ROOMS_CHANNEL, q)
 
 
 class MarkReadRequest(BaseModel):

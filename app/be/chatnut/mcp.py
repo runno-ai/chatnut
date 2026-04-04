@@ -1,17 +1,23 @@
 """FastMCP tool definitions — thin wrappers over ChatService."""
 
-import asyncio
 import json
 import logging
 import os
 import threading
-from collections import defaultdict
 from collections.abc import Callable
 from pathlib import Path
 
 import anyio
 from fastmcp import FastMCP
 
+from chatnut.notify import (
+    ROOMS_CHANNEL,
+    msg_channel,
+    notify,
+    status_channel,
+    subscribe,
+    unsubscribe,
+)
 from chatnut.service import ChatService
 from chatnut.version_check import get_cached_version_info
 
@@ -21,19 +27,9 @@ mcp = FastMCP("agents-chat")
 
 _service_factory: Callable[[], ChatService] | None = None
 
-# Waiter registry: room_id → set of asyncio.Queue objects
-# All mutations happen exclusively on the event loop thread (via _wake_all callback).
-_waiters: defaultdict[str, set[asyncio.Queue[None]]] = defaultdict(set)
-
-# Running event loop — set from app_lifespan for thread-safe notification
-_loop: asyncio.AbstractEventLoop | None = None
-
-# Maximum concurrent waiters per room — prevents DoS via connection flooding
-MAX_WAITERS_PER_ROOM = 100
-
 # Serializes post_message insert+notify with wait_for_messages' _read() closure.
 # This ensures that a message inserted by post_message is visible to _read() before
-# _notify_waiters fires. Without this lock, _read() could execute between INSERT and
+# notify fires. Without this lock, _read() could execute between INSERT and
 # notify, see no new messages, then miss the notification.
 # Only used in post_message() and wait_for_messages() — other write paths don't need it
 # because they don't interact with the waiter notification system.
@@ -45,12 +41,6 @@ def set_service_factory(factory: Callable[[], ChatService]) -> None:
     """Set the service factory used by all MCP tool handlers."""
     global _service_factory
     _service_factory = factory
-
-
-def set_event_loop(loop: asyncio.AbstractEventLoop | None) -> None:
-    """Store the running event loop for cross-thread waiter notification."""
-    global _loop
-    _loop = loop
 
 
 def _get_service() -> ChatService:
@@ -112,32 +102,6 @@ def _write_team_chatroom(team_name: str, room_data: dict) -> None:
         logger.warning("init_room: failed to write chatroom.json for team %r: %s", team_name, exc)
 
 
-def _notify_waiters(room_id: str) -> None:
-    """Wake up all wait_for_messages callers blocked on room_id.
-
-    Thread-safe: schedules _wake_all onto the event loop via call_soon_threadsafe so
-    _waiters is only ever touched on the event loop thread.
-
-    Safe to call on a closed or missing loop — both cases are no-ops.
-
-    IMPORTANT: Do NOT call from a finally block — must only fire on successful inserts.
-    """
-    if _loop is None or _loop.is_closed():
-        return
-
-    def _wake_all() -> None:
-        # Runs on the event loop thread — safe to read/iterate _waiters here
-        for q in list(_waiters.get(room_id, ())):
-            try:
-                q.put_nowait(None)
-            except asyncio.QueueFull:
-                pass  # already signaled; one pending notification is sufficient
-
-    try:
-        _loop.call_soon_threadsafe(_wake_all)
-    except RuntimeError:
-        pass  # loop closed between is_closed() check and call_soon_threadsafe
-
 
 @mcp.tool()
 def ping() -> dict:
@@ -169,6 +133,7 @@ def init_room(
     Non-fatal: file write failures are logged as warnings.
     """
     result = _get_service().init_room(project, name, branch=branch, description=description)
+    notify(ROOMS_CHANNEL)  # wake chatroom list SSE
     web_url = _get_web_base_url()
     if web_url:
         room_url = f"{web_url}/?room={result['id']}"
@@ -202,7 +167,8 @@ def post_message(
     svc = _get_service()
     with _wait_notify_lock:
         result = svc.post_message_by_room_id(room_id, sender, content, message_type=message_type)
-    _notify_waiters(room_id)  # only reached on successful insert
+    notify(msg_channel(room_id))  # wake message SSE + wait_for_messages
+    notify(ROOMS_CHANNEL)  # wake chatroom list SSE (messageCount, lastMessage)
     return result
 
 
@@ -260,13 +226,9 @@ async def wait_for_messages(
 
     timeout = min(timeout, 60.0)
 
-    # maxsize=1: signal queue — one pending notification is sufficient; extras are coalesced
-    q: asyncio.Queue[None] = asyncio.Queue(maxsize=1)
-    # Enforce per-room waiter limit to prevent DoS via connection flooding
-    if len(_waiters[room_id]) >= MAX_WAITERS_PER_ROOM:
-        raise ValueError(f"Too many concurrent waiters for room '{room_id}' (max {MAX_WAITERS_PER_ROOM})")
-    # Register BEFORE the DB check — see TOCTOU note in docstring
-    _waiters[room_id].add(q)
+    # Register BEFORE the DB check — see TOCTOU note in docstring.
+    # subscribe() enforces MAX_SUBSCRIBERS_PER_CHANNEL to prevent DoS.
+    q = subscribe(msg_channel(room_id))
     try:
         # Early exit: return immediately if messages already exist after since_id
         svc = _get_service()
@@ -282,7 +244,7 @@ async def wait_for_messages(
             existing["timed_out"] = False
             return existing
 
-        # Block until _notify_waiters fires _wake_all or timeout elapses
+        # Block until notify fires or timeout elapses
         woken = False
         with anyio.move_on_after(timeout):
             await q.get()
@@ -290,7 +252,7 @@ async def wait_for_messages(
 
         if not woken:
             # Final re-check: a message may have been posted concurrently with the timeout.
-            # This closes the race between anyio's deadline firing and a pending _notify_waiters call,
+            # This closes the race between anyio's deadline firing and a pending notify call,
             # and also handles the case where _loop was None so notifications were not delivered.
             final = await anyio.to_thread.run_sync(_read)
             if final["messages"]:
@@ -302,10 +264,7 @@ async def wait_for_messages(
         result["timed_out"] = False
         return result
     finally:
-        _waiters[room_id].discard(q)
-        # Clean up empty sets to avoid unbounded memory growth in long-running server
-        if not _waiters[room_id]:
-            _waiters.pop(room_id, None)
+        unsubscribe(msg_channel(room_id), q)
 
 
 @mcp.tool()
@@ -323,19 +282,28 @@ def list_projects() -> dict:
 @mcp.tool()
 def archive_room(project: str, name: str) -> dict:
     """Archive a room. Sets status to 'archived', keeps all messages."""
-    return _get_service().archive_room(project, name)
+    result = _get_service().archive_room(project, name)
+    notify(ROOMS_CHANNEL)
+    return result
 
 
 @mcp.tool()
 def delete_room(room_id: str) -> dict:
     """Permanently delete a room and all its messages. Only archived rooms can be deleted."""
-    return _get_service().delete_room(room_id)
+    result = _get_service().delete_room(room_id)
+    notify(ROOMS_CHANNEL)
+    return result
 
 
 @mcp.tool()
 def clear_room(project: str, name: str) -> dict:
     """Delete all messages in a room. Keeps the room record."""
-    return _get_service().clear_room(project, name)
+    result = _get_service().clear_room(project, name)
+    room_id = result.get("room_id") or result.get("id", "")
+    if room_id:
+        notify(msg_channel(room_id))  # wake message SSE (messages deleted)
+    notify(ROOMS_CHANNEL)  # wake chatroom list SSE (messageCount zeroed)
+    return result
 
 
 @mcp.tool()
@@ -362,7 +330,9 @@ def mark_read(
     last_read_message_id: int,
 ) -> dict:
     """Mark messages as read up to the given message ID for a reader. Cursor only moves forward."""
-    return _get_service().mark_read(room_id, reader, last_read_message_id)
+    result = _get_service().mark_read(room_id, reader, last_read_message_id)
+    notify(ROOMS_CHANNEL)  # wake chatroom list SSE (unreadCount changed)
+    return result
 
 
 @mcp.tool()
@@ -377,7 +347,9 @@ def update_status(room_id: str, sender: str, status: str) -> dict:
     Raises:
         ValueError: If the room does not exist or is archived.
     """
-    return _get_service().update_status(room_id, sender, status)
+    result = _get_service().update_status(room_id, sender, status)
+    notify(status_channel(room_id))  # wake status SSE
+    return result
 
 
 @mcp.tool()

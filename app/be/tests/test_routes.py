@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from chatnut.service import ChatService
-from chatnut.routes import create_router, chatroom_event_generator
+from chatnut.routes import create_router, chatroom_event_generator, message_event_generator, status_event_generator
 
 
 @pytest.fixture
@@ -580,3 +580,77 @@ async def test_status_event_generator_emits_on_status_update(db):
     assert len(payload["statuses"]) == 1
     assert payload["statuses"][0]["sender"] == "alice"
     assert payload["statuses"][0]["status"] == "working"
+
+
+# --- Per-stream poll intervals ---
+
+
+def test_poll_intervals_are_per_stream():
+    """Each SSE stream type has its own poll interval."""
+    from chatnut.routes import MESSAGE_POLL_INTERVAL, STATUS_POLL_INTERVAL, CHATROOM_POLL_INTERVAL
+    assert MESSAGE_POLL_INTERVAL <= 1.0, "Messages should poll at ≤1s"
+    assert STATUS_POLL_INTERVAL >= 2.0, "Status can poll at ≥2s"
+    assert CHATROOM_POLL_INTERVAL >= 2.0, "Chatroom list can poll at ≥2s"
+
+
+# --- Event-driven notification tests ---
+
+
+@pytest.mark.anyio
+async def test_message_generator_wakes_on_notification(svc):
+    """Message generator yields immediately when notified instead of waiting for poll."""
+    import asyncio
+    import anyio
+    from chatnut.notify import set_event_loop, notify
+
+    loop = asyncio.get_running_loop()
+    set_event_loop(loop)
+    gen = None
+    try:
+        room = svc.init_room("test", "notify-test")
+        room_id = room["id"]
+        svc.post_message_by_room_id(room_id, "alice", "setup")
+
+        gen = message_event_generator(svc, room_id, last_id=0)
+        first = await gen.__anext__()
+        assert "setup" in first["data"]
+
+        svc.post_message_by_room_id(room_id, "bob", "event-driven")
+        notify(f"messages:{room_id}")
+
+        with anyio.fail_after(1.0):
+            event = await gen.__anext__()
+        assert "event-driven" in event["data"]
+    finally:
+        if gen is not None:
+            await gen.aclose()
+        set_event_loop(None)
+
+
+@pytest.mark.anyio
+async def test_status_generator_wakes_on_notification(svc):
+    """Status generator yields immediately when notified."""
+    import asyncio
+    import anyio
+    from chatnut.notify import set_event_loop, notify
+
+    loop = asyncio.get_running_loop()
+    set_event_loop(loop)
+    gen = None
+    try:
+        room = svc.init_room("test", "status-notify-test")
+        room_id = room["id"]
+
+        gen = status_event_generator(svc, room_id)
+        await gen.__anext__()  # drain initial status
+
+        svc.update_status(room_id, "alice", "working")
+        notify(f"status:{room_id}")
+
+        with anyio.fail_after(1.0):
+            event = await gen.__anext__()
+        assert "working" in event["data"]
+    finally:
+        if gen is not None:
+            await gen.aclose()
+        set_event_loop(None)

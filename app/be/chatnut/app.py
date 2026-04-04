@@ -23,6 +23,7 @@ from chatnut.db import init_db
 from chatnut.service import ChatService
 from chatnut import mcp as mcp_module
 from chatnut.mcp import mcp
+from chatnut.notify import set_event_loop as set_notify_loop
 from chatnut.routes import create_router
 from chatnut.version_check import get_version_info
 
@@ -82,7 +83,7 @@ async def _version_check_loop() -> None:
 async def app_lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Ensure service is initialized at startup
     _get_service()
-    mcp_module.set_event_loop(asyncio.get_running_loop())
+    set_notify_loop(asyncio.get_running_loop())
     logger.info(
         "chatnut requires single-worker mode (uvicorn only, not gunicorn multi-worker). "
         "The wait_for_messages notification system uses process-local asyncio.Queue objects "
@@ -101,7 +102,7 @@ async def app_lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await version_task
     except asyncio.CancelledError:
         pass
-    mcp_module.set_event_loop(None)  # Clear stale reference; _notify_waiters guards against closed loop
+    set_notify_loop(None)  # Clear stale reference; notify() guards against closed loop
 
 
 app = FastAPI(
