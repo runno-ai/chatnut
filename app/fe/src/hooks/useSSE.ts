@@ -76,7 +76,7 @@ export function useSSE(roomId: string | null) {
       es.onerror = () => {
         if (closed) {
           es.close();
-          setConnectionStatus("disconnected");
+          // Skip setConnectionStatus — cleanup function already handles it
         } else if (es.readyState === 2) { // EventSource.CLOSED
           // Server rejected connection (HTTP error) — no native reconnect
           esRef.current = null;
