@@ -222,13 +222,16 @@ describe("useSSE", () => {
     expect(es.readyState).toBe(2);
   });
 
-  it("closes EventSource on unmount preventing native reconnect", () => {
-    const { unmount } = renderHook(() => useSSE("room-123"));
-    const es = lastCreatedES!;
-    expect(es.readyState).not.toBe(2);
+  it("sets disconnected on permanent server error (readyState CLOSED)", () => {
+    const { result } = renderHook(() => useSSE("room-123"));
 
-    unmount();
-    expect(es.readyState).toBe(2); // CLOSED — native reconnect won't fire
+    // Simulate permanent error — server rejected connection (HTTP 404, etc.)
+    act(() => {
+      lastCreatedES?._triggerError(2); // readyState = CLOSED
+    });
+
+    expect(result.current.connectionStatus).toBe("disconnected");
+    // EventSource is abandoned — esRef should be null
   });
 
   it("handles malformed JSON without crashing", () => {

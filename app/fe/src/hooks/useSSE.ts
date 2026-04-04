@@ -76,6 +76,9 @@ export function useSSE(roomId: string | null) {
       es.onerror = () => {
         if (closed) {
           es.close();
+          setConnectionStatus("disconnected");
+        } else if (es.readyState === 2) { // EventSource.CLOSED
+          // Server rejected connection (HTTP error) — no native reconnect
           esRef.current = null;
           setConnectionStatus("disconnected");
         } else {
