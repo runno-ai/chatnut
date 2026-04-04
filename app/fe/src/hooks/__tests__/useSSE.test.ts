@@ -231,7 +231,6 @@ describe("useSSE", () => {
     });
 
     expect(result.current.connectionStatus).toBe("disconnected");
-    // EventSource is abandoned — esRef should be null
   });
 
   it("handles malformed JSON without crashing", () => {
