@@ -325,7 +325,7 @@ The dev start script (`~/.claude/skills/chatnut/start-server-dev.sh`) sets `CHAT
 - **MCP HTTP transport (alternative)** — direct HTTP registration when server is already running
 - **UUID room PK** — same room name allowed across projects via `UNIQUE(project, name)`
 - **SQLite WAL mode** — concurrent reads (SSE polling) don't block MCP writes
-- **SSE for push** — unidirectional, auto-reconnect, Last-Event-Id for resume
+- **SSE for push (event-driven)** — unidirectional, auto-reconnect, Last-Event-Id for resume. SSE generators subscribe to typed notification channels (`messages:{room_id}`, `status:{room_id}`, `rooms`) via `chatnut/notify.py` and wake instantly on writes. Fallback polling (0.5s messages, 2s status/chatrooms) is a safety net. All write paths (`post_message`, `update_status`, `init_room`, `archive_room`, `delete_room`, `mark_read`, `clear_room`) fire notifications on relevant channels. This replaces the original 0.5s-for-all polling with ~90% fewer idle DB queries
 - **`get_all_room_stats()` batch for SSE** — 3 queries total (not 3N per-room) via batch COUNT/MAX/GROUP BY
 - **`_escape_like()` for search** — escapes SQL LIKE wildcards in user input
 - **No ORM** — direct sqlite3, schema is 5 tables (rooms, messages, read_cursors, room_status, agent_registry)
