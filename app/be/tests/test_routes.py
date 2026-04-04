@@ -597,7 +597,7 @@ def test_poll_intervals_are_per_stream():
 
 
 @pytest.mark.anyio
-async def test_message_generator_wakes_on_notification(svc, db):
+async def test_message_generator_wakes_on_notification(svc):
     """Message generator yields immediately when notified instead of waiting for poll."""
     import asyncio
     import anyio
@@ -628,7 +628,7 @@ async def test_message_generator_wakes_on_notification(svc, db):
 
 
 @pytest.mark.anyio
-async def test_status_generator_wakes_on_notification(svc, db):
+async def test_status_generator_wakes_on_notification(svc):
     """Status generator yields immediately when notified."""
     import asyncio
     import anyio

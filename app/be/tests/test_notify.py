@@ -1,6 +1,7 @@
 """Tests for the notification hub."""
 
 import asyncio
+from collections.abc import Iterator
 
 import anyio
 import pytest
@@ -24,7 +25,7 @@ def anyio_backend():
 
 
 @pytest.fixture(autouse=True)
-def _clean_hub():
+def _clean_hub() -> Iterator[None]:
     """Reset hub state between tests."""
     from chatnut import notify as mod
 
@@ -72,9 +73,7 @@ async def test_unsubscribe_cleans_up():
 @pytest.mark.anyio
 async def test_subscribe_max_limit():
     set_event_loop(asyncio.get_running_loop())
-    queues = []
-    for _ in range(MAX_SUBSCRIBERS_PER_CHANNEL):
-        queues.append(subscribe("flood:channel"))
+    queues = [subscribe("flood:channel") for _ in range(MAX_SUBSCRIBERS_PER_CHANNEL)]
     with pytest.raises(ValueError, match="Too many subscribers"):
         subscribe("flood:channel")
     for q in queues:
@@ -90,8 +89,8 @@ async def test_notify_wakes_subscriber():
     set_event_loop(loop)
     q = subscribe("room:abc:messages")
     notify("room:abc:messages")
-    await anyio.sleep(0.05)
-    assert not q.empty()
+    with anyio.fail_after(1.0):
+        await q.get()
     unsubscribe("room:abc:messages", q)
 
 
@@ -107,9 +106,10 @@ async def test_multiple_subscribers_all_notified():
     q1 = subscribe("rooms")
     q2 = subscribe("rooms")
     notify("rooms")
-    await anyio.sleep(0.05)
-    assert not q1.empty()
-    assert not q2.empty()
+    with anyio.fail_after(1.0):
+        await q1.get()
+    with anyio.fail_after(1.0):
+        await q2.get()
     unsubscribe("rooms", q1)
     unsubscribe("rooms", q2)
 
@@ -135,23 +135,25 @@ async def test_post_message_notifies_message_and_rooms_channels(db):
     set_event_loop(loop)
 
     svc = ChatService(db)
+    original_factory = mcp_module._service_factory
     mcp_module.set_service_factory(lambda: svc)
-    room = svc.init_room("test", "e2e-notify")
-    room_id = room["id"]
+    try:
+        room = svc.init_room("test", "e2e-notify")
+        room_id = room["id"]
 
-    # Subscribe to both channels (simulating SSE generators)
-    q_msg = subscribe(msg_channel(room_id))
-    q_rooms = subscribe(ROOMS_CHANNEL)
+        q_msg = subscribe(msg_channel(room_id))
+        q_rooms = subscribe(ROOMS_CHANNEL)
 
-    # Call the actual MCP tool function (fires notify)
-    mcp_module.post_message(room_id=room_id, sender="test", content="hello")
-    await anyio.sleep(0.05)  # let call_soon_threadsafe fire
+        mcp_module.post_message(room_id=room_id, sender="test", content="hello")
+        with anyio.fail_after(1.0):
+            await q_msg.get()
+        with anyio.fail_after(1.0):
+            await q_rooms.get()
 
-    assert not q_msg.empty(), "messages channel should be notified"
-    assert not q_rooms.empty(), "rooms channel should be notified"
-
-    unsubscribe(msg_channel(room_id), q_msg)
-    unsubscribe(ROOMS_CHANNEL, q_rooms)
+        unsubscribe(msg_channel(room_id), q_msg)
+        unsubscribe(ROOMS_CHANNEL, q_rooms)
+    finally:
+        mcp_module.set_service_factory(original_factory)
 
 
 @pytest.mark.anyio
@@ -164,13 +166,17 @@ async def test_update_status_notifies_status_channel(db):
     set_event_loop(loop)
 
     svc = ChatService(db)
+    original_factory = mcp_module._service_factory
     mcp_module.set_service_factory(lambda: svc)
-    room = svc.init_room("test", "e2e-status")
-    room_id = room["id"]
+    try:
+        room = svc.init_room("test", "e2e-status")
+        room_id = room["id"]
 
-    q = subscribe(status_channel(room_id))
-    mcp_module.update_status(room_id=room_id, sender="alice", status="working")
-    await anyio.sleep(0.05)
+        q = subscribe(status_channel(room_id))
+        mcp_module.update_status(room_id=room_id, sender="alice", status="working")
+        with anyio.fail_after(1.0):
+            await q.get()
 
-    assert not q.empty(), "status channel should be notified"
-    unsubscribe(status_channel(room_id), q)
+        unsubscribe(status_channel(room_id), q)
+    finally:
+        mcp_module.set_service_factory(original_factory)

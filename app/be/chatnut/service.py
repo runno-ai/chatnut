@@ -183,7 +183,7 @@ class ChatService:
             raise ValueError(f"Room '{name}' in project '{project}' not found")
         count = delete_messages(self.db, room_obj.id)
         delete_room_statuses(self.db, room_obj.id)
-        return {"name": name, "project": project, "deleted_count": count}
+        return {"name": name, "project": project, "room_id": room_obj.id, "deleted_count": count}
 
     def auto_archive_stale_rooms(self, max_inactive_seconds: int = 7200) -> list[dict]:
         """Archive live rooms inactive for longer than max_inactive_seconds (default 2h).
