@@ -605,26 +605,26 @@ async def test_message_generator_wakes_on_notification(svc):
 
     loop = asyncio.get_running_loop()
     set_event_loop(loop)
+    gen = None
+    try:
+        room = svc.init_room("test", "notify-test")
+        room_id = room["id"]
+        svc.post_message_by_room_id(room_id, "alice", "setup")
 
-    room = svc.init_room("test", "notify-test")
-    room_id = room["id"]
-    svc.post_message_by_room_id(room_id, "alice", "setup")
+        gen = message_event_generator(svc, room_id, last_id=0)
+        first = await gen.__anext__()
+        assert "setup" in first["data"]
 
-    gen = message_event_generator(svc, room_id, last_id=0)
-    # Drain initial history
-    first = await gen.__anext__()
-    assert "setup" in first["data"]
+        svc.post_message_by_room_id(room_id, "bob", "event-driven")
+        notify(f"messages:{room_id}")
 
-    # Post a message and notify — generator should yield quickly
-    svc.post_message_by_room_id(room_id, "bob", "event-driven")
-    notify(f"messages:{room_id}")
-
-    with anyio.fail_after(1.0):
-        event = await gen.__anext__()
-    assert "event-driven" in event["data"]
-
-    await gen.aclose()
-    set_event_loop(None)
+        with anyio.fail_after(1.0):
+            event = await gen.__anext__()
+        assert "event-driven" in event["data"]
+    finally:
+        if gen is not None:
+            await gen.aclose()
+        set_event_loop(None)
 
 
 @pytest.mark.anyio
@@ -636,21 +636,21 @@ async def test_status_generator_wakes_on_notification(svc):
 
     loop = asyncio.get_running_loop()
     set_event_loop(loop)
+    gen = None
+    try:
+        room = svc.init_room("test", "status-notify-test")
+        room_id = room["id"]
 
-    room = svc.init_room("test", "status-notify-test")
-    room_id = room["id"]
+        gen = status_event_generator(svc, room_id)
+        await gen.__anext__()  # drain initial status
 
-    gen = status_event_generator(svc, room_id)
-    # Drain initial status
-    first = await gen.__anext__()
+        svc.update_status(room_id, "alice", "working")
+        notify(f"status:{room_id}")
 
-    # Update status and notify
-    svc.update_status(room_id, "alice", "working")
-    notify(f"status:{room_id}")
-
-    with anyio.fail_after(1.0):
-        event = await gen.__anext__()
-    assert "working" in event["data"]
-
-    await gen.aclose()
-    set_event_loop(None)
+        with anyio.fail_after(1.0):
+            event = await gen.__anext__()
+        assert "working" in event["data"]
+    finally:
+        if gen is not None:
+            await gen.aclose()
+        set_event_loop(None)
