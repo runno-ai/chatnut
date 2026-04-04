@@ -82,6 +82,8 @@ export function useSSE(roomId: string | null) {
           esRef.current = null;
           setConnectionStatus("disconnected");
         } else {
+          // Transient error — browser auto-reconnects (readyState stays CONNECTING).
+          // Status reflects the brief interruption while the browser retries.
           setConnectionStatus("connecting");
         }
       };
