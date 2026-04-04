@@ -56,9 +56,11 @@ export class MockEventSource {
     }
   }
 
-  /** Simulate connection error (sets readyState=CLOSED, triggers onerror + addEventListener listeners) */
-  _triggerError() {
-    this.readyState = 2;
+  /** Simulate connection error.
+   *  Default readyState=0 (CONNECTING) matches native EventSource behavior
+   *  where the browser auto-reconnects. Pass 2 (CLOSED) for explicit-close scenarios. */
+  _triggerError(readyState: number = 0) {
+    this.readyState = readyState;
     const event = new Event("error");
     this.onerror?.(event);
     for (const listener of this.listeners["error"] ?? []) {

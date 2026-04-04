@@ -105,6 +105,7 @@ cd app/fe && bun run test
 | `STATIC_DIR` | Path to built React SPA | `chatnut/static/` (bundled in wheel) |
 | `CHATNUT_RUN_DIR` | Runtime dir for PID/port files | `~/.chatnut/` |
 | `CHATNUT_OPEN_BROWSER` | Auto-open browser on `init_room` (`0` to suppress) | `1` |
+| `CHATNUT_DEV_PORT` | Backend port for Vite dev proxy target (set by portless start script) | `8000` |
 
 ## MCP Registration
 

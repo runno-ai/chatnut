@@ -124,24 +124,78 @@ describe("useSSE", () => {
     expect(result.current.messages).toEqual([]);
   });
 
-  it("sets connecting status on error and retries", () => {
-    vi.useFakeTimers();
+  it("sets connecting status on error (native reconnect)", () => {
     const { result } = renderHook(() => useSSE("room-123"));
+
+    act(() => {
+      lastCreatedES?._triggerError();
+    });
+
+    expect(result.current.connectionStatus).toBe("connecting");
+    // Same EventSource — native reconnect, no new instance
+    expect(lastCreatedES?.readyState).not.toBe(2);
+  });
+
+  it("does not create a new EventSource on error (relies on native reconnect)", () => {
+    renderHook(() => useSSE("room-123"));
     const firstES = lastCreatedES;
 
     act(() => {
       firstES?._triggerError();
     });
 
-    expect(result.current.connectionStatus).toBe("connecting");
+    // Same instance — no new EventSource created
+    expect(lastCreatedES).toBe(firstES);
+  });
 
-    // Advance past the 3-second retry delay
+  it("does not schedule a retry timer on error", () => {
+    vi.useFakeTimers();
+    renderHook(() => useSSE("room-123"));
+    const firstES = lastCreatedES;
+
     act(() => {
-      vi.advanceTimersByTime(3000);
+      firstES?._triggerError();
     });
 
-    // A new EventSource should have been created
-    expect(lastCreatedES).not.toBe(firstES);
+    // Advance past old 3s retry delay — no new EventSource should appear
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+
+    expect(lastCreatedES).toBe(firstES);
+  });
+
+  it("preserves messages across native reconnect", () => {
+    const { result } = renderHook(() => useSSE("room-123"));
+
+    act(() => {
+      lastCreatedES?._emit(
+        JSON.stringify({
+          id: 1,
+          room_id: "room-123",
+          sender: "alice",
+          content: "hello",
+          message_type: "message",
+          created_at: "2026-01-01T00:00:00Z",
+          metadata: null,
+        })
+      );
+    });
+    expect(result.current.messages).toHaveLength(1);
+
+    // Simulate error — native reconnect, ES stays open
+    act(() => {
+      lastCreatedES?._triggerError();
+    });
+    expect(result.current.connectionStatus).toBe("connecting");
+
+    // On reconnect, onopen fires again
+    act(() => {
+      lastCreatedES?._triggerOpen();
+    });
+    expect(result.current.connectionStatus).toBe("connected");
+    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages[0].content).toBe("hello");
   });
 
   it("closes the old EventSource on room change", () => {
@@ -168,23 +222,15 @@ describe("useSSE", () => {
     expect(es.readyState).toBe(2);
   });
 
-  it("does not reconnect after unmount when retry is pending", () => {
-    vi.useFakeTimers();
-    const { unmount } = renderHook(() => useSSE("room-123"));
-    const firstES = lastCreatedES!;
+  it("sets disconnected on permanent server error (readyState CLOSED)", () => {
+    const { result } = renderHook(() => useSSE("room-123"));
 
+    // Simulate permanent error — server rejected connection (HTTP 404, etc.)
     act(() => {
-      firstES._triggerError(); // schedules retry
+      lastCreatedES?._triggerError(2); // readyState = CLOSED
     });
 
-    unmount(); // should clear retry timer
-
-    const beforeAdvance = lastCreatedES;
-    act(() => {
-      vi.advanceTimersByTime(3000);
-    });
-
-    expect(lastCreatedES).toBe(beforeAdvance); // no new EventSource
+    expect(result.current.connectionStatus).toBe("disconnected");
   });
 
   it("handles malformed JSON without crashing", () => {

@@ -9,7 +9,6 @@ export function useSSE(roomId: string | null) {
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("connecting");
   const esRef = useRef<EventSource | null>(null);
-  const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Batch incoming messages with requestAnimationFrame
   const pendingRef = useRef<ChatMessage[]>([]);
@@ -71,14 +70,21 @@ export function useSSE(roomId: string | null) {
         if (!closed) setMessages([]);
       });
 
+      // Native EventSource auto-reconnect: browser retries with Last-Event-Id header.
+      // Supported in all modern browsers (Chrome, Firefox, Safari, Edge).
+      // Reconnect interval is browser-default (~3s) unless server sends SSE retry: field.
       es.onerror = () => {
-        es.close();
-        esRef.current = null;
         if (closed) {
+          es.close();
+          // Skip setConnectionStatus — cleanup function already handles it
+        } else if (es.readyState === 2) { // EventSource.CLOSED
+          // Server rejected connection (HTTP error) — no native reconnect
+          esRef.current = null;
           setConnectionStatus("disconnected");
         } else {
+          // Transient error — browser auto-reconnects (readyState stays CONNECTING).
+          // Status reflects the brief interruption while the browser retries.
           setConnectionStatus("connecting");
-          retryRef.current = setTimeout(connect, 3000);
         }
       };
     }
@@ -89,8 +95,6 @@ export function useSSE(roomId: string | null) {
       closed = true;
       esRef.current?.close();
       esRef.current = null;
-      if (retryRef.current) clearTimeout(retryRef.current);
-      retryRef.current = null;
       if (rafIdRef.current !== null) {
         cancelAnimationFrame(rafIdRef.current);
         rafIdRef.current = null;

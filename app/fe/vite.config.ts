@@ -4,12 +4,17 @@ import tailwindcss from "@tailwindcss/vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
 import path from "path";
 
+// Dev proxy target: reads CHATNUT_DEV_PORT from shell env (set by portless dev start script).
+// Falls back to 8000 for manual `bun run dev` without portless.
+const devPort = process.env.CHATNUT_DEV_PORT || "8000";
+const devTarget = `http://localhost:${devPort}`;
+
 export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": "http://localhost:8000",
-      "/mcp": "http://localhost:8000",
+      "/api": devTarget,
+      "/mcp": devTarget,
     },
   },
   plugins: [react(), tailwindcss(), viteSingleFile()],
