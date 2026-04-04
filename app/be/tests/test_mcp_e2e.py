@@ -18,6 +18,7 @@ import pytest
 from fastmcp import Client
 
 from chatnut import mcp as mcp_module
+from chatnut.notify import set_event_loop as set_notify_loop, _subscribers
 from chatnut.service import ChatService
 
 
@@ -28,11 +29,11 @@ async def mcp_svc(db):
     original_factory = mcp_module._service_factory
     mcp_module.set_service_factory(lambda: svc)
     # Required for wait_for_messages notification path to work in tests
-    mcp_module.set_event_loop(asyncio.get_running_loop())
+    set_notify_loop(asyncio.get_running_loop())
     yield svc
     mcp_module.set_service_factory(original_factory)
-    mcp_module.set_event_loop(None)
-    mcp_module._waiters.clear()
+    set_notify_loop(None)
+    _subscribers.clear()
 
 
 async def call(client, tool: str, args: dict | None = None):

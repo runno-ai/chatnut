@@ -119,3 +119,58 @@ async def test_notify_without_loop_is_noop():
     """notify() with no event loop set is a no-op, not an error."""
     # _loop is None from fixture cleanup
     notify("some:channel")  # should not raise
+
+
+# ── Integration tests: MCP tool → notification → SSE subscriber ──────────────
+
+
+@pytest.mark.anyio
+async def test_post_message_notifies_message_and_rooms_channels(db):
+    """Actual MCP post_message fires notifications on both messages:{room_id}
+    and rooms channels, waking SSE subscribers."""
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+
+    loop = asyncio.get_running_loop()
+    set_event_loop(loop)
+
+    svc = ChatService(db)
+    mcp_module.set_service_factory(lambda: svc)
+    room = svc.init_room("test", "e2e-notify")
+    room_id = room["id"]
+
+    # Subscribe to both channels (simulating SSE generators)
+    q_msg = subscribe(msg_channel(room_id))
+    q_rooms = subscribe(ROOMS_CHANNEL)
+
+    # Call the actual MCP tool function (fires notify)
+    mcp_module.post_message(room_id=room_id, sender="test", content="hello")
+    await anyio.sleep(0.05)  # let call_soon_threadsafe fire
+
+    assert not q_msg.empty(), "messages channel should be notified"
+    assert not q_rooms.empty(), "rooms channel should be notified"
+
+    unsubscribe(msg_channel(room_id), q_msg)
+    unsubscribe(ROOMS_CHANNEL, q_rooms)
+
+
+@pytest.mark.anyio
+async def test_update_status_notifies_status_channel(db):
+    """Actual MCP update_status fires notification on status:{room_id} channel."""
+    from chatnut import mcp as mcp_module
+    from chatnut.service import ChatService
+
+    loop = asyncio.get_running_loop()
+    set_event_loop(loop)
+
+    svc = ChatService(db)
+    mcp_module.set_service_factory(lambda: svc)
+    room = svc.init_room("test", "e2e-status")
+    room_id = room["id"]
+
+    q = subscribe(status_channel(room_id))
+    mcp_module.update_status(room_id=room_id, sender="alice", status="working")
+    await anyio.sleep(0.05)
+
+    assert not q.empty(), "status channel should be notified"
+    unsubscribe(status_channel(room_id), q)
