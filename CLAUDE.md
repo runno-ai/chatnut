@@ -1,5 +1,10 @@
 # CLAUDE.md
 
+## Iron Law
+
+**NEVER use `.claude/rules/` or `.claude/skills/` paths in Edit/Write/Read tool calls.**
+**ALWAYS use `.cc-config/` paths. `.claude/rules` and `.claude/skills` are symlinks to `.cc-config/`.**
+
 ## Project Overview
 
 ChatNut — unified FastAPI server for agent team chatrooms. Serves MCP tools (HTTP transport), REST/SSE web API, and a React SPA from a single process. SQLite-backed with project/branch scoping, search, and real-time updates via SSE.
