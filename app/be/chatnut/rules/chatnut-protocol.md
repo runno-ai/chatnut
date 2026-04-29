@@ -1,10 +1,19 @@
-# ChatNut Team Protocol
+# ChatNut Defensive Primitives
 
-Rules for all agents participating in a chatnut team chatroom. These rules apply whenever you have a `room_id` and `mcp__chatnut__*` tools are available.
+Wire-level rules for any agent participating in a chatnut room. These rules
+apply whenever you have a `room_id` and `mcp__chatnut__*` tools are available,
+**regardless of which consuming skill spawned you** (plan-draft, code-review,
+or any other team-orchestration skill).
+
+> **Scope:** This file documents the universal primitives — things every
+> chatnut agent MUST do to be safe and useful. Discussion protocol (rounds,
+> facilitation, completion handshakes, engagement style) is **consumer-defined**
+> by the spawning skill. See that skill's SKILL.md for protocol specifics.
 
 ## Room Discovery
 
-If `room_id` is not in your spawn prompt, read it from `~/.claude/teams/{team_name}/chatroom.json`.
+If `room_id` is not in your spawn prompt, read it from
+`~/.claude/teams/{team_name}/chatroom.json`.
 
 ## Read Before Write
 
@@ -14,7 +23,35 @@ On every wake-up, read the full chatroom before responding:
 read_messages(room_id="<ROOM_ID>")
 ```
 
-React to everything new, not just the ping that woke you.
+React to everything new, not just the ping that woke you. Without this,
+late messages from peers are silently missed — wire-truth, not style.
+
+## @Mention Notifications (poster MUST dual-post)
+
+`post_message` returns a `mentions` field listing each registered agent
+referenced via `@<name>` in the message. The posting agent MUST then
+`SendMessage` each mentioned agent — chatnut does NOT auto-deliver.
+Without this dual-post, @mentions silently fail.
+
+```python
+result = post_message(room_id=ROOM_ID, sender="<role>", content="@security please review this")
+for mention in result.get("mentions", []):
+    SendMessage(to=mention["task_id"], message=f"You were @mentioned in the chatroom: {content}")
+```
+
+- `mentions` contains `[{name, task_id}]` for each registered agent
+- Unregistered @mentions are silently skipped (empty list)
+
+**Whoever creates the room** (typically the orchestrator) registers each
+teammate before @mentions can resolve:
+
+```
+register_agent(room_id=ROOM_ID, agent_name="security", task_id="security")
+register_agent(room_id=ROOM_ID, agent_name="architect", task_id="architect")
+```
+
+`agent_name` must match the `@name` used in messages. `task_id` is the
+teammate's name (used in `SendMessage(to=...)`).
 
 ## Status Reporting (Mandatory)
 
@@ -27,46 +64,61 @@ update_status(room_id="<ROOM_ID>", sender="<your-role>", status="<current activi
 **When to report:**
 - Starting a task: `"Implementing X"`
 - Blocked: `"Blocked on Y — waiting for Z"`
-- Completed: `"Finished X — ready for review"`
 - Switching context: `"Moving to task B"`
 
-Status is visible in the web UI as a sticky bar above messages.
+Status is visible in the web UI as a sticky bar above messages. This is
+how human observers track teammate state.
 
-## @Mention Notifications
+## Idle Is Informational
 
-When `post_message` returns a `mentions` field in its response, the posting agent MUST `SendMessage` each mentioned agent:
+The team-system substrate emits `idle_notification` whenever a teammate
+finishes a turn and is waiting for the next ping. **Idle is a wire-state,
+not a completion signal.**
 
-```python
-result = post_message(room_id=ROOM_ID, sender="pm", content="@security please review this")
-for mention in result.get("mentions", []):
-    SendMessage(to=mention["task_id"], message=f"You were @mentioned in the chatroom: {content}")
-```
+- Receiving an idle notification means: "this teammate's turn ended; they
+  are waiting for the next message that wakes them."
+- Idle does NOT mean: "this teammate is done with their work."
+- Completion semantics (DONE handshake, orchestrator-declared end,
+  timeout, etc.) are consumer-skill-defined. Whichever skill spawned the
+  team owns the rule for what "done" means.
 
-- `mentions` contains `[{name, task_id}]` for each registered agent that was @mentioned
-- Unregistered @mentions are silently skipped (empty list)
-- This is automatic — agents don't need to remember to dual-post
-
-**PM responsibility:** After spawning teammates and creating the chatroom, the PM registers each agent:
-
-```
-register_agent(room_id=ROOM_ID, agent_name="security", task_id="security")
-register_agent(room_id=ROOM_ID, agent_name="architect", task_id="architect")
-```
-
-The `agent_name` must match the `@name` used in messages. The `task_id` is the teammate's name (used in `SendMessage(to=...)`).
-
-## Engagement Rules
-
-- **Shared channel** — all teammates and the PM see every message
-- **Engage with others** — respond to, challenge, or build on other teammates' points
-- **Ping peers directly** — if your finding affects another role, SendMessage them
-- **Tag roles** — use `@role` in chatroom posts for cross-cutting concerns
-- **Disagree explicitly** — challenge assumptions, propose alternatives
+If you are an orchestrator waiting for teammate completion, do NOT treat
+idle as completion. Read your consuming skill's SKILL.md for the actual
+completion signal.
 
 ## MCP Fallback
 
 If `mcp__chatnut__*` tools fail or are unavailable:
 
-1. Do NOT silently drop your findings
-2. Send full content to the team leader via SendMessage with `[CHATROOM FALLBACK]` prefix
-3. The leader will relay to the chatroom on your behalf
+1. Do NOT silently drop your findings — they are real work output
+2. Send full content to the team leader via `SendMessage` with the
+   `[CHATROOM FALLBACK]` prefix
+3. The leader relays to the chatroom on your behalf when MCP recovers
+
+```
+SendMessage(
+  to="<team-leader-name>",
+  message="[CHATROOM FALLBACK] mcp__chatnut unavailable.\n\n<full content>"
+)
+```
+
+This is universal recovery — independent of any specific protocol.
+
+## What this file does NOT specify
+
+The following are **consumer-skill responsibilities**, not chatnut
+primitives:
+
+- How many discussion rounds (zero, one, several, free-discuss)
+- Who facilitates (orchestrator-in-room, orchestrator-silent, no orchestrator)
+- How discussion ends (DONE handshake, orchestrator-declared, timeout-only,
+  human-in-loop)
+- Engagement style (debate-heavy "challenge, build on, dispute" vs
+  independent parallel verdicts vs single-shot reviews)
+- Triage / synthesis pattern (orchestrator reads chatroom directly,
+  OR spawns a triage subagent, OR consumes per-teammate DM summaries)
+- Lifecycle ordering (when to archive, when to teardown relative to
+  artifact updates, etc.)
+
+For each of these, read the SKILL.md of the skill that spawned you
+(`/plan-draft`, `/code-review`, `/research`, etc.).

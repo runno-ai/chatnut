@@ -96,9 +96,7 @@ If any `mcp__chatnut__*` tool call fails with a connection or session error:
 | `register_agent(room_id, agent_name, task_id)` | Register an agent for @mention notifications (UPSERT, case-insensitive) |
 | `list_agents(room_id)` | List all registered agents in a room |
 
-## Communication Protocol
-
-### Channels
+## Channels
 
 ```
 SendMessage = wake-up ping (triggers a teammate's turn)
@@ -107,56 +105,47 @@ Chatroom    = content channel (all substantive discussion)
 
 **Rule:** SendMessage contains only a short ping (e.g., "Check the chatroom — new findings posted"). ALL substantive content goes in the chatroom so every teammate has full visibility.
 
-### Proactive Engagement Rules
+## Discussion Protocol Is Consumer-Defined
 
-Teammates are **active participants**, not passive responders:
+chatnut provides the **wire** (post / read / wait / mentions / status / fallback). It does NOT prescribe a discussion protocol. Consuming skills (e.g. `/plan-draft`, `/code-review`, `/research`) decide their own:
 
-1. **Chatroom-first** — On ANY wake-up (from PM or peer), read the full chatroom before responding. React to everything new, not just the ping that woke you.
-2. **Peer-to-peer pings** — When your finding affects another role, ping them directly via SendMessage. Don't route through PM.
-3. **@role tagging** — Tag specific roles in chatroom posts for cross-cutting concerns: "**@security** — this endpoint accepts user input without validation"
-4. **Challenge and disagree** — Don't just agree. Propose alternatives, flag risks, question assumptions.
-5. **Build on others** — Reference and extend other teammates' points. "Agreeing with @backend-dev on X — adding that Y is also affected."
+- **How many rounds** (zero / one / several / free-discuss with no rounds)
+- **Who facilitates** (orchestrator-in-room / orchestrator-silent / no orchestrator)
+- **How discussion ends** (DONE handshake / orchestrator-declared / timeout-only / human-in-loop)
+- **Engagement style** (debate-heavy challenge-and-build vs independent parallel verdicts vs single-shot reviews)
+- **Triage / synthesis pattern** (orchestrator reads chatroom / spawns a triage subagent / consumes per-teammate DM summaries)
+- **Lifecycle ordering** (when to archive, when to teardown relative to artifact updates)
 
-### PM Role
+For each of these, read the SKILL.md of the consuming skill.
 
-The PM is a **facilitator**, not a message router:
-- **Triggers rounds** — pings teammates to start each discussion round
-- **Moderates** — posts pointed questions to the chatroom to drive discussion
-- **Does NOT relay** — teammates ping each other directly for cross-cutting concerns
-- **Synthesizes** — reads the full chatroom after rounds complete and consolidates findings
+The only protocol-level rules shipped at the chatnut layer are the **defensive primitives** (read-before-write, @mention dual-post, status reporting, idle-is-informational, MCP fallback) — see `chatnut-protocol.md`. These are wire-truth, not policy.
 
-## Discussion Rounds
+### Examples of consumer choices
 
-Consuming skills trigger rounds; the protocol within each round is standard.
+| Consumer | Protocol shape |
+|---|---|
+| `/plan-draft` | Free-discuss (no rounds), orchestrator-silent, DONE handshake via DM, opus triage subagent reads chatroom |
+| `/code-review` | (consumer's call — could be parallel single-shot reviews, or rounds, etc.) |
+| Future skills | Whatever fits their problem |
 
-**Round 1 — Initial Posts:**
-PM posts context to chatroom → pings all teammates. Each teammate: reads chatroom → posts primary findings → pings relevant peers → goes idle.
+If you're authoring a new consumer, you don't have to ask chatnut for permission to invent your protocol — chatnut is wire, you bring policy.
 
-**Round 2 — Cross-Review:**
-PM pings all teammates (or peers wake each other from Round 1 pings). Each teammate: reads FULL chatroom → responds to others' points → challenges or builds → goes idle.
+## Teammate Spawn Prompts (consumer-side)
 
-**Round 3 — Resolution** (optional, PM triggers if disagreements remain):
-PM pings specific teammates with pointed questions. Teammates resolve directly via chatroom + peer pings.
-
-**When to skip rounds:** Consuming skills may use fewer rounds (e.g., code-review uses progressive batch processing instead of fixed rounds). The protocol above is the default — skills adapt as needed.
-
-## Teammate Instructions
-
-Teammate protocol rules are installed as a global Claude Code rule at `~/.claude/rules/chatnut-protocol.md`. All spawned agents load this automatically — **no need to include protocol rules in spawn prompts**.
-
-Install/update: `chatnut install`
-
-The only thing consuming skills need to include in spawn prompts is the `room_id`:
+Consuming skills define their spawn prompts. The only chatnut-level
+requirement is to include the `room_id` so teammates can use the wire:
 
 ```
 ## Team Chatroom (room_id: <ROOM_ID>)
 ```
 
-### Multi-Round Protocol
-You may be woken up multiple times:
-- **Round 1:** Post your primary findings
-- **Round 2:** Read others' posts and respond — agree, challenge, or extend
-- **Round 3:** Resolve remaining disagreements
+The defensive primitives in `chatnut-protocol.md` are auto-loaded into
+every spawned agent's context — consumers don't need to repeat them in
+spawn prompts. Consumers DO need to include their own protocol rules
+(rounds vs free-discuss, completion semantics, engagement style) since
+those are not shipped at the chatnut layer.
+
+Install / update the global rule: `chatnut install`
 
 ## MCP Fallback (SendMessage)
 
