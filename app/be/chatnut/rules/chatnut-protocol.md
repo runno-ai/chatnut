@@ -1,14 +1,46 @@
 # ChatNut Defensive Primitives
 
-Wire-level rules for any agent participating in a chatnut room. These rules
-apply whenever you have a `room_id` and `mcp__chatnut__*` tools are available,
-**regardless of which consuming skill spawned you** (plan-draft, code-review,
-or any other team-orchestration skill).
+Wire-level rules for agents that interact with a chatnut room. These rules
+apply regardless of which consuming skill spawned you (plan-draft,
+code-review, or any other team-orchestration skill) — but **which
+primitives apply depends on your role** (see §Roles).
 
 > **Scope:** This file documents the universal primitives — things every
 > chatnut agent MUST do to be safe and useful. Discussion protocol (rounds,
 > facilitation, completion handshakes, engagement style) is **consumer-defined**
 > by the spawning skill. See that skill's SKILL.md for protocol specifics.
+
+## Roles
+
+Two distinct roles touch chatnut. The primitives below apply differently
+to each.
+
+### Participant
+
+Posts messages, may be @mentioned by peers, takes turns in a multi-round
+discussion, idles between turns awaiting wakeups. Examples: domain
+teammates in `/plan-draft` (Architect, Backend, Security, QA, DBA);
+reviewers in any future round-based skill.
+
+**All primitives below apply.**
+
+### Read-only consumer
+
+Calls `read_messages` once (or pages through with `has_more`) and emits a
+final result as its Task return string, then exits. Does NOT post, does
+NOT @mention or get @mentioned, does NOT idle, has NO peers or team
+leader. Example: the Triage subagent in `/plan-draft` Phase 3.5.
+
+Of the primitives below:
+
+| Primitive | Read-only consumer |
+|---|---|
+| Room Discovery | Applies only if `room_id` is not already in spawn prompt (usually it is). |
+| Read Before Write | N/A — no wake-up cycle. Read once at startup, then produce output. |
+| @Mention dual-post | N/A — does not post. |
+| Status Reporting | **Skip.** Not tracked by peers; status updates would be pointless noise. |
+| Idle Is Informational | N/A — does not idle, has no peers waiting on idle signals. |
+| MCP Fallback | **Override** — see that section. |
 
 ## Room Discovery
 
@@ -53,7 +85,11 @@ register_agent(room_id=ROOM_ID, agent_name="architect", task_id="architect")
 `agent_name` must match the `@name` used in messages. `task_id` is the
 teammate's name (used in `SendMessage(to=...)`).
 
-## Status Reporting (Mandatory)
+## Status Reporting (Mandatory for participants)
+
+> **Read-only consumers skip this section.** Status is how peers and human
+> observers track a participant's state across turns. A read-only consumer
+> runs once and exits — there is no state worth reporting.
 
 Report your status at every task transition via MCP:
 
@@ -88,6 +124,8 @@ completion signal.
 
 ## MCP Fallback
 
+### Participants
+
 If `mcp__chatnut__*` tools fail or are unavailable:
 
 1. Do NOT silently drop your findings — they are real work output
@@ -102,7 +140,20 @@ SendMessage(
 )
 ```
 
-This is universal recovery — independent of any specific protocol.
+### Read-only consumers (override)
+
+A read-only consumer has no team leader to address — `SendMessage` is not
+a usable channel. If `mcp__chatnut__read_messages` fails:
+
+1. Do NOT silently drop the failure
+2. Encode it in your **Task return string** — the consuming skill's
+   SKILL.md defines the exact format (typically a `STATUS:` prefix on
+   your final assistant message, e.g., `STATUS: CHATROOM_READ_FAILED`)
+3. The consuming skill handles fallback (re-spawn, direct read by the
+   orchestrator, etc.)
+
+Do NOT call `SendMessage`. Do NOT call `mcp__chatnut__post_message`.
+Failure is encoded in the return value, not in the chatroom or in DMs.
 
 ## What this file does NOT specify
 
