@@ -79,6 +79,7 @@ reviews:
     - '!**/bun.lockb'
     - '!uv.lock'
     - '!docs/plans/archived/**'
+    - '!**/working-scope.md'
 
   path_instructions:
     # === Global Review Requirements ===
