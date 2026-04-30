@@ -10,7 +10,6 @@ app/be/chatnut/static/
 *.db-shm
 *.db-wal
 .pytest_cache/
-working-scope.md  # local task scoping file (worktree-specific, not committed)
 node_modules/
 .DS_Store
 .env
