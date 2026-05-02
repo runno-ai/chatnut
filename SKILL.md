@@ -111,7 +111,7 @@ chatnut provides the **wire** (post / read / wait / mentions / status / fallback
 
 - **How many rounds** (zero / one / several / free-discuss with no rounds)
 - **Who facilitates** (orchestrator-in-room / orchestrator-silent / no orchestrator)
-- **How discussion ends** (DONE handshake / orchestrator-declared / timeout-only / human-in-loop)
+- **How discussion ends** (DONE handshake / orchestrator-declared / timeout-only / human-in-loop / **quiescence-poll** — used by `/plan-draft`)
 - **Engagement style** (debate-heavy challenge-and-build vs independent parallel verdicts vs single-shot reviews)
 - **Triage / synthesis pattern** (orchestrator reads chatroom / spawns a triage subagent / consumes per-teammate DM summaries)
 - **Lifecycle ordering** (when to archive, when to teardown relative to artifact updates)
@@ -124,8 +124,7 @@ The only protocol-level rules shipped at the chatnut layer are the **defensive p
 
 | Consumer | Protocol shape |
 |---|---|
-| `/plan-draft` | Free-discuss (no rounds), orchestrator-silent, DONE handshake via DM, opus triage subagent reads chatroom |
-| `/code-review` | (consumer's call — could be parallel single-shot reviews, or rounds, etc.) |
+| `/plan-draft` | Free-discuss (no rounds), orchestrator-silent (PM posts and reads ZERO messages from init_room until TeamDelete), no completion handshake, external quiescence-poll termination (90s silence), opus triage subagent reads disk-dump |
 | Future skills | Whatever fits their problem |
 
 If you're authoring a new consumer, you don't have to ask chatnut for permission to invent your protocol — chatnut is wire, you bring policy.
