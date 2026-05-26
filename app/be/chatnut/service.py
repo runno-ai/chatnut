@@ -1,7 +1,9 @@
 """ChatService — all business logic for team chatrooms."""
 
+import functools
 import re
 import sqlite3
+import threading
 
 from chatnut.db import (
     create_room,
@@ -33,9 +35,50 @@ VALID_MESSAGE_TYPES = {"message", "system"}
 _MENTION_RE = re.compile(r'(?<!\w)@([\w-]+)')
 
 
+def _synchronized(method):
+    """Serialize a ChatService method under the instance's reentrant DB lock.
+
+    The single sqlite3.Connection (db.py ``init_db``, ``check_same_thread=False``)
+    is shared across the asyncio event loop AND anyio worker threads — the SSE
+    room-list generator runs ``list_rooms`` via ``anyio.to_thread.run_sync``.
+    A sqlite3 Connection is NOT safe for concurrent use across threads: parallel
+    execute/fetch interleave statement state and corrupt cursor results (observed
+    as empty rows -> ``Room(**{})`` TypeError + cascading SendTimeoutError storms,
+    which starved the thread pool and timed out concurrent ``post_message``
+    writes). The lock spans the whole execute->fetch->commit logical operation,
+    so it is applied at the method boundary, not at the cursor level. RLock so a
+    locked method may call another (e.g. ``post_message`` -> ``_detect_mentions``)
+    on the same thread.
+    """
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return wrapper
+
+
+def _synchronize_db_methods(cls):
+    """Class decorator: wrap every non-dunder method with ``_synchronized``.
+
+    Applied to ``ChatService`` so all current AND future DB-touching methods
+    serialize on ``self._lock`` with no per-method annotation drift. ``__init__``
+    (dunder) is intentionally not wrapped — it sets up ``self._lock`` before any
+    wrapped method can run.
+    """
+    for name, attr in list(cls.__dict__.items()):
+        if callable(attr) and not name.startswith("__"):
+            setattr(cls, name, _synchronized(attr))
+    return cls
+
+
+@_synchronize_db_methods
 class ChatService:
     def __init__(self, db_conn: sqlite3.Connection):
         self.db = db_conn
+        # Reentrant lock guarding all DB access — see _synchronized() above.
+        self._lock = threading.RLock()
 
     def db_path(self) -> str:
         """Return the database file path used by this service instance.
